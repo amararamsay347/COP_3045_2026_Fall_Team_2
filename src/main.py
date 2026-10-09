@@ -13,8 +13,8 @@ from src.data_processing import clean_ibm, clean_paysim, inspect_paysim
 
 
 # Store the dataset paths in one place so they are easy to update later.
-PAYSIM_FILE = PROJECT_DIR / "data" / "PS_20174392719_1491204439457_log.csv"
-IBM_FILE = PROJECT_DIR / "data" / "HI-Small_Trans.csv"
+PAYSIM_FILE = PROJECT_DIR / "data" / "paysim_data.csv"
+IBM_FILE = PROJECT_DIR / "data" / "IBM_small_Hi_data" / "HI-Small_Trans.csv"
 
 
 def main():
