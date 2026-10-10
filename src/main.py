@@ -9,87 +9,76 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(PROJECT_DIR))
 
 # Import the dataset inspection and cleaning functions used by the main workflow.
-from src.data_processing import (
-    clean_ibm,
-    clean_paysim,
-    combine_datasets,
-    inspect_ibm,
-    inspect_paysim,
-)
+from src.data_processing import clean_ibm, clean_paysim, inspect_paysim
+
+
+# Store the dataset paths in one place so they are easy to update later.
+PAYSIM_FILE = PROJECT_DIR / "data" / "paysim_data.csv"
+IBM_FILE = PROJECT_DIR / "data" / "IBM_small_HI_data" / "HI-Small_Trans.csv"
+PROCESSED_DIR = PROJECT_DIR / "data" / "processed"
 
 
 def main():
-    data_dir = PROJECT_DIR / "data" / "ibm"
-    paysim_path = data_dir / "paysim_data.csv"
-    ibm_dir = data_dir / "IBM_small_HI_data"
-
-    # Inspect the raw PAYSim CSV to review its size, columns, and missing-data issues.
-    inspect_paysim(paysim_path)
+    # Inspect a sample of the raw PaySim CSV.
+    inspect_paysim(PAYSIM_FILE)
 
     print("\n" + "=" * 50 + "\n")
 
-    # Inspect every IBM CSV in the folder to summarize schema and data quality before cleaning.
-    inspect_ibm(ibm_dir)
+    # Clean the PaySim dataset by keeping the fields needed for analysis
+    # and creating the derived balance and time variables.
+    paysim = clean_paysim(PAYSIM_FILE)
 
-    # Clean the PAYSim dataset by keeping only essential fraud-analysis columns and derived fields.
-    paysim = clean_paysim(paysim_path)
+    # Clean the IBM transaction dataset by selecting the important fields,
+    # converting timestamps, and creating derived variables.
+    ibm = clean_ibm(IBM_FILE)
 
-    # Clean the IBM dataset by selecting key fields, standardizing labels, and adding useful timestamps.
-    ibm = clean_ibm(ibm_dir / "HI-Small_Trans.csv")
+    # Save cleaned datasets so the summary-statistics script can analyze these outputs.
+    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+    paysim_output = PROCESSED_DIR / "paysim_cleaned.csv"
+    ibm_output = PROCESSED_DIR / "ibm_cleaned.csv"
+    paysim.to_csv(paysim_output, index=False)
+    ibm.to_csv(ibm_output, index=False)
 
-    # Show the cleaned PAYSim preview and overall shape for comparison with the raw data.
-    print("\nPaysim cleaned data head: ")
+    # Show the cleaned PaySim preview and overall shape.
+    print("\nPaySim cleaned data head:")
     print(paysim.head())
 
-    print("\nPaysim cleaned data shape: ")
+    print("\nPaySim cleaned data shape:")
     print(paysim.shape)
 
-    # Show the cleaned IBM preview and overall shape for the same validation step.
-    print("\nIBM cleaned data head: ")
+    # Show the cleaned IBM preview and overall shape.
+    print("\nIBM cleaned data head:")
     print(ibm.head())
 
-    print("\nIBM cleaned data shape: ")
+    print("\nIBM cleaned data shape:")
     print(ibm.shape)
 
-    # Print the distribution of fraudulent and legitimate PAYSim transactions.
-    print("\nPAYSim fraud labels:")
+    # Print the distribution of fraudulent and legitimate PaySim transactions.
+    print("\nPaySim fraud labels:")
     print(paysim["isFraud"].value_counts())
 
-    # Print the distribution of laundering and non-laundering IBM records.
+    # Print the distribution of laundering and non-laundering IBM transactions.
     print("\nIBM laundering labels:")
     print(ibm["Is Laundering"].value_counts())
 
-    # Summarize the different transaction categories in PAYSim.
-    print("\nPAYSim transaction types:")
+    # Summarize the different transaction categories in PaySim.
+    print("\nPaySim transaction types:")
     print(paysim["type"].value_counts())
 
-    # Summarize payment-format categories in the IBM dataset.
+    # Summarize the different payment formats in IBM.
     print("\nIBM payment formats:")
     print(ibm["Payment Format"].value_counts())
 
-    print("\nPAYSim hours:")
+    # Summarize the derived transaction-hour variable for PaySim.
+    print("\nPaySim hours:")
     print(paysim["hour"].describe())
 
+    # Summarize the derived transaction-hour variable for IBM.
     print("\nIBM hours:")
     print(ibm["hour"].describe())
 
-    # Append both sources with common fields and retain source-specific columns.
-    combined = combine_datasets(paysim, ibm)
-    output_path = PROJECT_DIR / "data" / "processed" / "combined_transactions.csv"
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    combined.to_csv(output_path, index=False)
-
-    print("\nCombined analytical data shape:")
-    print(combined.shape)
-
-    print("\nCombined labels by source and label type:")
-    print(
-        combined.groupby(["dataset_source", "label_type", "is_suspicious"])
-        .size()
-        .unstack(fill_value=0)
-    )
-
-    print(f"\nCombined dataset saved to: {output_path}")
+    print(f"\nCleaned PaySim dataset saved to: {paysim_output}")
+    print(f"Cleaned IBM dataset saved to: {ibm_output}")
 
 
 # Run the main workflow only when this file is executed directly.
