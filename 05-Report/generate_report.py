@@ -14,7 +14,7 @@ from fpdf import FPDF
 # ------------------------------------------------------------
 
 # This is the combined analytical dataset created by src/main.py.
-data_file = "data/processed/combined_transactions.csv"
+data_file = "03-Data cleaning/clean_data.csv"
 
 # This is the final PDF report that this script will create.
 report_file = "05-Report/project_report.pdf"
@@ -48,10 +48,10 @@ df = pd.read_csv(
     usecols=columns,
     dtype={
         "transaction_amount": "float64",
-        "currency": "category",
-        "transaction_category": "category",
-        "dataset_source": "category",
-        "label_type": "category",
+        "currency": "string",
+        "transaction_category": "string",
+        "dataset_source": "string",
+        "label_type": "string",
         "is_suspicious": "int8",
     },
 )
