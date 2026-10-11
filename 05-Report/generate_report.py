@@ -1,6 +1,8 @@
 # Import pandas to read and analyze the combined transaction dataset.
-import pandas as pd
 from pathlib import Path
+from datetime import date
+
+import pandas as pd
 
 # Import Matplotlib and Seaborn to create the report visualizations.
 import matplotlib.pyplot as plt
@@ -69,6 +71,20 @@ df = pd.read_csv(
     },
 )
 
+# PaySim does not define a currency; preserve those rows in currency groupings.
+df["currency"] = (
+    df["currency"].astype("object").fillna("N/A").astype("category")
+)
+df["dataset_source"] = (
+    df["dataset_source"]
+    .astype("object")
+    .replace({"PAYSim": "PaySim"})
+    .astype("category")
+)
+
+# Count all fields in the combined file, not only the report's selected columns.
+num_columns = len(pd.read_csv(data_file, nrows=0).columns)
+
 print("Combined dataset loaded successfully.")
 
 
@@ -78,9 +94,6 @@ print("Combined dataset loaded successfully.")
 
 # Count the total number of transactions.
 num_rows = len(df)
-
-# Count the total number of variables used in the analytical dataset.
-num_columns = len(df.columns)
 
 # Count how many transactions came from each original dataset.
 source_counts = df["dataset_source"].value_counts()
@@ -240,8 +253,7 @@ amount_summary_rows = []
 # non-suspicious transaction amounts.
 amount_status_rows = []
 
-# Calculate amount statistics separately for each dataset using
-# its most common currency.
+# Calculate amount statistics separately by dataset and its reporting currency.
 for row in main_currency_by_source.itertuples(index=False):
 
     source = row.dataset_source
@@ -263,7 +275,10 @@ for row in main_currency_by_source.itertuples(index=False):
             "currency": str(currency),
             "count": amounts.count(),
             "mean": amounts.mean(),
+            "std": amounts.std(),
+            "percentile_25": amounts.quantile(0.25),
             "median": amounts.median(),
+            "percentile_75": amounts.quantile(0.75),
             "minimum": amounts.min(),
             "maximum": amounts.max(),
         }
@@ -467,8 +482,10 @@ plt.xlabel(
 )
 
 plt.ylabel(
-    "Median Transaction Amount"
+    "Median Transaction Amount (log scale)"
 )
+
+plt.yscale("log")
 
 plt.tight_layout()
 
@@ -517,6 +534,46 @@ finding4 = (
     + f"{highest_category_rate:.4f}%."
 )
 
+findings = [finding1, finding2, finding3, finding4]
+
+for source, group in amount_status_summary.groupby("display_source"):
+    medians = group.set_index("status")["median_amount"]
+    suspicious_median = medians["Suspicious"]
+    non_suspicious_median = medians["Not Suspicious"]
+    findings.append(
+        f"In {source}, the median suspicious transaction "
+        f"({suspicious_median:,.2f}) was "
+        f"{suspicious_median / non_suspicious_median:.1f}x the median "
+        f"non-suspicious one ({non_suspicious_median:,.2f})."
+    )
+
+top3 = category_summary.head(3)
+findings.append(
+    "The three highest-risk categories were "
+    + ", ".join(top3["display_category"])
+    + "."
+)
+
+ibm_ach = category_summary.loc[
+    (category_summary["dataset_source"] == "IBM")
+    & (category_summary["transaction_category"] == "ACH")
+]
+if not ibm_ach.empty:
+    findings.append(
+        "IBM ACH transactions had a suspicious rate of "
+        f"{ibm_ach.iloc[0]['suspicious_rate']:.2f}%."
+    )
+
+findings.append(
+    "Limitation: the data are synthetic and highly imbalanced "
+    f"(about {overall_suspicious_rate:.2f}% suspicious), so rates should "
+    "be read as relative, not as real-world fraud prevalence."
+)
+
+ibm_maximum = amount_summary.loc[
+    amount_summary["dataset_source"] == "IBM",
+    "maximum",
+].iloc[0]
 
 # ------------------------------------------------------------
 # CREATE THE PDF
@@ -553,7 +610,32 @@ pdf.multi_cell(
     align="C",
 )
 
-pdf.ln(5)
+pdf.set_font(
+    "Helvetica",
+    "",
+    10,
+)
+
+pdf.set_x(pdf.l_margin)
+pdf.multi_cell(
+    0,
+    7,
+    f"COP 3045 Python Programming II - Team 2 | {date.today():%B %d, %Y}",
+    align="C",
+)
+
+pdf.set_x(pdf.l_margin)
+pdf.multi_cell(
+    0,
+    6,
+    "PaySim "
+    + f"({source_counts.get('PaySim', 0):,} mobile-money transactions) "
+    + "and IBM AML HI-Small "
+    + f"({source_counts.get('IBM', 0):,} bank transactions), both synthetic.",
+    align="C",
+)
+
+pdf.ln(4)
 
 
 # ------------------------------------------------------------
@@ -592,7 +674,9 @@ pdf.cell(
 pdf.cell(
     0,
     8,
-    "Total variables: " + str(num_columns),
+    "Total variables: "
+    + str(num_columns)
+    + " (union of both datasets' columns)",
     ln=True,
 )
 
@@ -728,9 +812,8 @@ pdf.set_font(
 pdf.multi_cell(
     0,
     7,
-    "Transaction amounts are summarized using the most common currency "
-    "within each dataset so that values from different currencies are "
-    "not mixed together."
+    "PaySim amounts have no currency (N/A). IBM amounts use its most "
+    "common currency (US Dollar)."
 )
 
 pdf.ln(4)
@@ -860,6 +943,113 @@ for row in amount_summary.itertuples(index=False):
         ln=True,
     )
 
+pdf.ln(5)
+pdf.set_font(
+    "Helvetica",
+    "B",
+    10,
+)
+pdf.cell(
+    0,
+    8,
+    "Spread and quartiles:",
+    ln=True,
+)
+
+pdf.set_font(
+    "Helvetica",
+    "B",
+    8,
+)
+for width, title in (
+    (35, "Dataset"),
+    (32, "Currency"),
+    (40, "Std. Dev."),
+    (40, "25th Percentile"),
+    (40, "75th Percentile"),
+):
+    pdf.cell(width, 8, title, border=1)
+pdf.ln()
+
+pdf.set_font(
+    "Helvetica",
+    "",
+    8,
+)
+for row in amount_summary.itertuples(index=False):
+    for width, value in (
+        (35, str(row.dataset_source)),
+        (32, str(row.currency)),
+        (40, f"{row.std:,.2f}"),
+        (40, f"{row.percentile_25:,.2f}"),
+        (40, f"{row.percentile_75:,.2f}"),
+    ):
+        pdf.cell(width, 8, value, border=1)
+    pdf.ln()
+
+pdf.ln(3)
+pdf.set_font(
+    "Helvetica",
+    "",
+    9,
+)
+pdf.multi_cell(
+    0,
+    6,
+    "The IBM maximum of "
+    + f"{ibm_maximum:,.2f} is an extreme outlier, so the median is the "
+    "more reliable measure of a typical transaction.",
+)
+
+pdf.ln(4)
+pdf.set_font(
+    "Helvetica",
+    "B",
+    10,
+)
+pdf.cell(
+    0,
+    8,
+    "Categorical summary (top 8 categories by suspicious rate):",
+    ln=True,
+)
+
+pdf.set_font(
+    "Helvetica",
+    "",
+    8,
+)
+pdf.multi_cell(
+    0,
+    6,
+    "Counts provide context for the rate; categories with few transactions "
+    "can have volatile rates.",
+)
+
+pdf.set_font(
+    "Helvetica",
+    "B",
+    8,
+)
+for width, title in (
+    (88, "Dataset and category"),
+    (42, "Transactions"),
+    (42, "Suspicious rate"),
+):
+    pdf.cell(width, 8, title, border=1)
+pdf.ln()
+
+pdf.set_font(
+    "Helvetica",
+    "",
+    8,
+)
+for row in category_summary.head(8).itertuples(index=False):
+    pdf.cell(88, 8, row.display_category, border=1)
+    pdf.cell(42, 8, f"{row.transaction_count:,}", border=1)
+    pdf.cell(42, 8, f"{row.suspicious_rate:.4f}%", border=1)
+    pdf.ln()
+
 
 # ------------------------------------------------------------
 # VISUALIZATIONS
@@ -898,15 +1088,22 @@ pdf.cell(
 pdf.image(
     chart1_file,
     x=20,
-    w=170,
+    w=140,
 )
 
+pdf.set_x(pdf.l_margin)
+pdf.set_font("Helvetica", "", 9)
+pdf.multi_cell(
+    0,
+    6,
+    "Suspicious rates are shown separately for PaySim fraud and IBM "
+    "laundering labels; interpret each relative to its dataset.",
+)
+pdf.ln(2)
 
 # ------------------------------------------------------------
 # SECOND VISUALIZATION
 # ------------------------------------------------------------
-
-pdf.add_page()
 
 pdf.set_font(
     "Helvetica",
@@ -921,11 +1118,21 @@ pdf.cell(
     ln=True,
 )
 
+pdf.set_x(pdf.l_margin)
+
 # Insert the category graph.
 pdf.image(
     chart2_file,
     x=15,
-    w=180,
+    w=170,
+)
+pdf.set_x(pdf.l_margin)
+pdf.set_font("Helvetica", "", 9)
+pdf.multi_cell(
+    0,
+    6,
+    "Categories are ordered by suspicious rate; category rates should be "
+    "read alongside their transaction counts.",
 )
 
 
@@ -948,20 +1155,28 @@ pdf.cell(
     ln=True,
 )
 
+pdf.set_x(pdf.l_margin)
+
 # Insert the median amount graph.
 pdf.image(
     chart3_file,
     x=15,
-    w=180,
+    w=170,
+)
+pdf.set_x(pdf.l_margin)
+pdf.set_font("Helvetica", "", 9)
+pdf.multi_cell(
+    0,
+    6,
+    "The logarithmic vertical axis keeps the PaySim and IBM medians "
+    "readable on the same chart.",
 )
 
+pdf.set_x(pdf.l_margin)
 
 # ------------------------------------------------------------
 # KEY ANALYTICAL FINDINGS
 # ------------------------------------------------------------
-
-# Start a new page for the automatically calculated findings.
-pdf.add_page()
 
 pdf.set_font(
     "Helvetica",
@@ -969,6 +1184,7 @@ pdf.set_font(
     14,
 )
 
+pdf.set_x(pdf.l_margin)
 pdf.cell(
     0,
     10,
@@ -982,36 +1198,13 @@ pdf.set_font(
     11,
 )
 
-# Add each analytical finding to the report.
-pdf.multi_cell(
-    0,
-    8,
-    finding1,
-)
-
-pdf.ln(3)
-
-pdf.multi_cell(
-    0,
-    8,
-    finding2,
-)
-
-pdf.ln(3)
-
-pdf.multi_cell(
-    0,
-    8,
-    finding3,
-)
-
-pdf.ln(3)
-
-pdf.multi_cell(
-    0,
-    8,
-    finding4,
-)
+for finding in findings:
+    pdf.multi_cell(
+        0,
+        7,
+        finding,
+    )
+    pdf.ln(2)
 
 
 # ------------------------------------------------------------
