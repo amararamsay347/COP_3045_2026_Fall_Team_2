@@ -9,12 +9,14 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(PROJECT_DIR))
 
 # Import the dataset inspection and cleaning functions used by the main workflow.
-from src.data_processing import clean_ibm, clean_paysim, inspect_paysim
+from src.data_processing import clean_ibm, clean_paysim, combine_datasets, inspect_paysim
 
 
 # Store the dataset paths in one place so they are easy to update later.
 PAYSIM_FILE = PROJECT_DIR / "data" / "paysim_data.csv"
-IBM_FILE = PROJECT_DIR / "data" / "IBM_small_Hi_data" / "HI-Small_Trans.csv"
+IBM_FILE = PROJECT_DIR / "data" / "HI-Small_Trans.csv"
+PROCESSED_DIR = PROJECT_DIR / "data" / "processed"
+CLEAN_DATA_FILE = PROJECT_DIR / "03-Data cleaning" / "clean_data.csv"
 
 
 def main():
@@ -30,6 +32,13 @@ def main():
     # Clean the IBM transaction dataset by selecting the important fields,
     # converting timestamps, and creating derived variables.
     ibm = clean_ibm(IBM_FILE)
+
+    # Save cleaned datasets so the summary-statistics script can analyze these outputs.
+    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+    paysim_output = PROCESSED_DIR / "paysim_cleaned.csv"
+    ibm_output = PROCESSED_DIR / "ibm_cleaned.csv"
+    paysim.to_csv(paysim_output, index=False)
+    ibm.to_csv(ibm_output, index=False)
 
     # Show the cleaned PaySim preview and overall shape.
     print("\nPaySim cleaned data head:")
@@ -68,6 +77,15 @@ def main():
     # Summarize the derived transaction-hour variable for IBM.
     print("\nIBM hours:")
     print(ibm["hour"].describe())
+
+    print(f"\nCleaned PaySim dataset saved to: {paysim_output}")
+    print(f"Cleaned IBM dataset saved to: {ibm_output}")
+
+    # Export the combined cleaned data required by the graphical EDA assignment.
+    df = combine_datasets(paysim, ibm)
+    CLEAN_DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(CLEAN_DATA_FILE, index=False, chunksize=100_000)
+    print(f"\nCombined cleaned dataset saved to: {CLEAN_DATA_FILE}")
 
 
 # Run the main workflow only when this file is executed directly.
