@@ -4,3 +4,6 @@ channels:
 dependencies:
   - python=3.12
   - pandas
+  - matplotlib
+  - seaborn
+  - fpdf2

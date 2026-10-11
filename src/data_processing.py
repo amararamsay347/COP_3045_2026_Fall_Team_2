@@ -119,3 +119,27 @@ def clean_ibm(file_path):
     df["Same Bank"] = df["From Bank"] == df["To Bank"]
 
     return df
+
+
+def combine_datasets(paysim, ibm):
+    paysim_analytics = paysim.copy()
+    paysim_analytics["dataset_source"] = "PAYSim"
+    paysim_analytics["transaction_amount"] = paysim["amount"]
+    paysim_analytics["currency"] = pd.NA
+    paysim_analytics["transaction_category"] = paysim["type"]
+    paysim_analytics["is_suspicious"] = paysim["isFraud"]
+    paysim_analytics["label_type"] = "fraud"
+
+    ibm_analytics = ibm.copy()
+    ibm_analytics["dataset_source"] = "IBM"
+    ibm_analytics["transaction_amount"] = ibm["Amount Received"]
+    ibm_analytics["currency"] = ibm["Receiving Currency"]
+    ibm_analytics["transaction_category"] = ibm["Payment Format"]
+    ibm_analytics["is_suspicious"] = ibm["Is Laundering"]
+    ibm_analytics["label_type"] = "laundering"
+
+    return pd.concat(
+        [paysim_analytics, ibm_analytics],
+        ignore_index=True,
+        sort=False,
+    )

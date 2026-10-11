@@ -1,5 +1,6 @@
 # Import pandas to read and analyze the combined transaction dataset.
 import pandas as pd
+from pathlib import Path
 
 # Import Matplotlib and Seaborn to create the report visualizations.
 import matplotlib.pyplot as plt
@@ -13,22 +14,33 @@ from fpdf import FPDF
 # FILE PATHS
 # ------------------------------------------------------------
 
+# Resolve files from the repository root instead of depending on
+# which directory the script is launched from.
+PROJECT_DIR = Path(__file__).resolve().parents[1]
+
 # This is the combined analytical dataset created by src/main.py.
-data_file = "data/processed/combined_transactions.csv"
+data_file = PROJECT_DIR / "data" / "processed" / "combined_transactions.csv"
 
 # This is the final PDF report that this script will create.
-report_file = "05-Report/project_report.pdf"
+report_file = str(PROJECT_DIR / "05-Report" / "project_report.pdf")
 
 # These image files will temporarily store the visualizations
 # before they are inserted into the PDF report.
-chart1_file = "05-Report/suspicious_rate_by_source.png"
-chart2_file = "05-Report/suspicious_rate_by_category.png"
-chart3_file = "05-Report/median_amount_by_status.png"
+chart1_file = str(PROJECT_DIR / "05-Report" / "suspicious_rate_by_source.png")
+chart2_file = str(PROJECT_DIR / "05-Report" / "suspicious_rate_by_category.png")
+chart3_file = str(PROJECT_DIR / "05-Report" / "median_amount_by_status.png")
 
 
 # ------------------------------------------------------------
 # READ THE COMBINED DATASET
 # ------------------------------------------------------------
+
+# Generate the required combined dataset before running this report.
+if not data_file.is_file():
+    raise FileNotFoundError(
+        f"Combined dataset not found: {data_file}. "
+        "Run 'python src/main.py' from the project root first."
+    )
 
 # These are the columns used by the team's combined analytical dataset.
 columns = [
@@ -46,6 +58,7 @@ columns = [
 df = pd.read_csv(
     data_file,
     usecols=columns,
+    low_memory=False,
     dtype={
         "transaction_amount": "float64",
         "currency": "category",

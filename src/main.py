@@ -9,12 +9,18 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(PROJECT_DIR))
 
 # Import the dataset inspection and cleaning functions used by the main workflow.
-from src.data_processing import clean_ibm, clean_paysim, inspect_paysim
+from src.data_processing import (
+    clean_ibm,
+    clean_paysim,
+    combine_datasets,
+    inspect_paysim,
+)
 
 
 # Store the dataset paths in one place so they are easy to update later.
 PAYSIM_FILE = PROJECT_DIR / "data" / "paysim_data.csv"
 IBM_FILE = PROJECT_DIR / "data" / "IBM_small_Hi_data" / "HI-Small_Trans.csv"
+PROCESSED_DIR = PROJECT_DIR / "data" / "processed"
 
 
 def main():
@@ -30,6 +36,16 @@ def main():
     # Clean the IBM transaction dataset by selecting the important fields,
     # converting timestamps, and creating derived variables.
     ibm = clean_ibm(IBM_FILE)
+
+    # Save the cleaned datasets and shared analytical dataset for downstream work.
+    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+    paysim_output = PROCESSED_DIR / "paysim_cleaned.csv"
+    ibm_output = PROCESSED_DIR / "ibm_cleaned.csv"
+    combined_output = PROCESSED_DIR / "combined_transactions.csv"
+    paysim.to_csv(paysim_output, index=False)
+    ibm.to_csv(ibm_output, index=False)
+    combined = combine_datasets(paysim, ibm)
+    combined.to_csv(combined_output, index=False)
 
     # Show the cleaned PaySim preview and overall shape.
     print("\nPaySim cleaned data head:")
@@ -68,6 +84,10 @@ def main():
     # Summarize the derived transaction-hour variable for IBM.
     print("\nIBM hours:")
     print(ibm["hour"].describe())
+
+    print(f"\nCleaned PaySim dataset saved to: {paysim_output}")
+    print(f"Cleaned IBM dataset saved to: {ibm_output}")
+    print(f"Combined dataset saved to: {combined_output}")
 
 
 # Run the main workflow only when this file is executed directly.
