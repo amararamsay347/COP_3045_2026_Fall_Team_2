@@ -1,6 +1,9 @@
 name: cop3045
 channels:
-  - defaults
+  - conda-forge
 dependencies:
   - python=3.12
   - pandas
+  - matplotlib
+  - seaborn
+  - fpdf2
