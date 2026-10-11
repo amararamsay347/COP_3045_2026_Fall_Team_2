@@ -1,23 +1,6 @@
-# COP_3045_2026_Fall_Team_2
-
-## Generate the automated report
-
-From the project root, install the project environment and run the data pipeline
-before generating the PDF:
-
-```powershell
-conda env create -f environment.yml
-conda activate cop3045
-python src/main.py
-python 05-Report/generate_report.py
-```
-
-The pipeline writes cleaned datasets and `data/processed/combined_transactions.csv`.
-The report reads that combined dataset and writes the PDF and chart images to
-`05-Report/`.
 # COP3045 Fall 2026 - Team 2
 
-Cleans and analyzes PaySim (fraud) and IBM HI-Small (money-laundering) transaction data, then generates a PDF report.
+Cleans and analyzes PaySim (fraud) and IBM HI-Small (money-laundering) transaction data, then generates a PDF report. The two datasets are combined into one analytical table because both are synthetic financial-transaction data with fraud/laundering labels, which lets us compare suspicious-transaction patterns across sources.
 
 ## Datasets
 Place these in `data/` (ignored by Git):
