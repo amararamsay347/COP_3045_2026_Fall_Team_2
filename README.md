@@ -15,16 +15,18 @@ If you update the dependencies in `environment.yml`, apply the changes with:
 conda env update -f environment.yml --prune
 ```
 
-## Create cleaned data and compute summary statistics
+## Create the combined dataset and compute summary statistics
 
-Run the data-cleaning workflow first. It saves the cleaned PaySim and IBM datasets
-under `data/processed/`:
+Run the data-cleaning workflow first. It cleans the PaySim and IBM transaction
+datasets, then saves their combined analytical data to
+`data/processed/combined_transactions.csv`:
 
 ```bash
 python src/main.py
 ```
 
-Then calculate summary statistics from those cleaned datasets:
+Then calculate numerical and categorical summary statistics from the combined
+dataset:
 
 ```bash
 python src/summary_statistics.py

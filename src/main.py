@@ -9,18 +9,25 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(PROJECT_DIR))
 
 # Import the dataset inspection and cleaning functions used by the main workflow.
-from src.data_processing import clean_ibm, clean_paysim, inspect_paysim
+from src.data_processing import (
+    clean_ibm,
+    clean_paysim,
+    combine_datasets,
+    inspect_ibm,
+    inspect_paysim,
+)
 
 
 # Store the dataset paths in one place so they are easy to update later.
-PAYSIM_FILE = PROJECT_DIR / "data" / "paysim_data.csv"
+PAYSIM_FILE = PROJECT_DIR / "data" / "ibm" / "paysim_data.csv"
 IBM_FILE = PROJECT_DIR / "data" / "IBM_small_HI_data" / "HI-Small_Trans.csv"
 PROCESSED_DIR = PROJECT_DIR / "data" / "processed"
 
 
 def main():
-    # Inspect a sample of the raw PaySim CSV.
+    # Inspect the raw datasets before cleaning.
     inspect_paysim(PAYSIM_FILE)
+    inspect_ibm(IBM_FILE.parent)
 
     print("\n" + "=" * 50 + "\n")
 
@@ -76,6 +83,16 @@ def main():
     # Summarize the derived transaction-hour variable for IBM.
     print("\nIBM hours:")
     print(ibm["hour"].describe())
+
+    # Combine both sources using the shared analytical fields.
+    combined = combine_datasets(paysim, ibm)
+    combined_path = PROCESSED_DIR / "combined_transactions.csv"
+    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+    combined.to_csv(combined_path, index=False)
+
+    print("\nCombined analytical data shape:")
+    print(combined.shape)
+    print(f"Combined dataset saved to: {combined_path}")
 
     print(f"\nCleaned PaySim dataset saved to: {paysim_output}")
     print(f"Cleaned IBM dataset saved to: {ibm_output}")

@@ -1,133 +1,166 @@
+from collections import defaultdict
 from pathlib import Path
-import sys
 
+import numpy as np
 import pandas as pd
 
 
 PROJECT_DIR = Path(__file__).resolve().parents[1]
-PROCESSED_DIR = PROJECT_DIR / "data" / "processed"
-
-if __package__ in (None, ""):
-    sys.path.insert(0, str(PROJECT_DIR))
-
-
-def compute_summary_statistics(
-    df: pd.DataFrame,
-    amount_column: str,
-    currency_column: str | None = None,
-    label_column: str = "Is Laundering",
-) -> pd.DataFrame:
-    """Summarize transaction amounts by label and, when provided, currency."""
-    group_columns = [label_column]
-    if currency_column is not None:
-        group_columns.append(currency_column)
-
-    grouped = df.groupby(
-        group_columns,
-        dropna=False,
-    )[amount_column]
-
-    summary = grouped.agg(
-        total_rows="size",
-        count="count",
-        mean="mean",
-        std="std",
-        minimum="min",
-        percentile_25=lambda values: values.quantile(0.25),
-        median="median",
-        percentile_75=lambda values: values.quantile(0.75),
-        percentile_90=lambda values: values.quantile(0.90),
-        percentile_95=lambda values: values.quantile(0.95),
-        percentile_99=lambda values: values.quantile(0.99),
-        maximum="max",
-        zero_count=lambda values: values.eq(0).sum(),
-    ).reset_index()
-
-    summary["missing_count"] = summary["total_rows"] - summary["count"]
-    summary["interquartile_range"] = (
-        summary["percentile_75"] - summary["percentile_25"]
-    )
-    return summary
+COMBINED_FILE = PROJECT_DIR / "data" / "processed" / "combined_transactions.csv"
+CHUNK_SIZE = 250_000
+REQUIRED_COLUMNS = [
+    "transaction_amount",
+    "currency",
+    "transaction_category",
+    "dataset_source",
+    "label_type",
+    "is_suspicious",
+]
 
 
-def summarize_category(
-    df: pd.DataFrame,
-    category_column: str,
-    label_column: str,
-) -> pd.DataFrame:
-    """Count categories and report their share and suspicious-transaction rate."""
-    counts = pd.crosstab(
-        df[category_column].fillna("(Missing)"),
-        df[label_column],
-    ).reindex(columns=[0, 1], fill_value=0)
+def _amount_summary(values: np.ndarray, total_rows: int) -> dict[str, float | int]:
+    amounts = pd.Series(values)
+    return {
+        "total_rows": total_rows,
+        "count": int(amounts.count()),
+        "missing_count": total_rows - int(amounts.count()),
+        "mean": amounts.mean(),
+        "std": amounts.std(),
+        "minimum": amounts.min(),
+        "percentile_25": amounts.quantile(0.25),
+        "median": amounts.median(),
+        "percentile_75": amounts.quantile(0.75),
+        "percentile_90": amounts.quantile(0.90),
+        "percentile_95": amounts.quantile(0.95),
+        "percentile_99": amounts.quantile(0.99),
+        "maximum": amounts.max(),
+        "zero_count": int(amounts.eq(0).sum()),
+        "interquartile_range": amounts.quantile(0.75) - amounts.quantile(0.25),
+    }
 
-    summary = counts.rename(
-        columns={0: "not_suspicious", 1: "suspicious"}
-    ).rename_axis(category_column).reset_index()
-    summary["total"] = summary["not_suspicious"] + summary["suspicious"]
-    summary["percent"] = 100 * summary["total"] / len(df)
-    summary["suspicious_rate"] = (
-        100 * summary["suspicious"] / summary["total"]
-    )
-    return summary
+
+def _print_categorical_summary(
+    category: str,
+    counts: dict[tuple[str, str, str], list[int]],
+    source_totals: dict[tuple[str, str], int],
+) -> None:
+    rows = []
+    for (source, label_type, value), outcome_counts in sorted(counts.items()):
+        not_suspicious, suspicious = outcome_counts
+        total = not_suspicious + suspicious
+        rows.append(
+            {
+                "dataset_source": source,
+                "label_type": label_type,
+                category: value,
+                "not_suspicious": not_suspicious,
+                "suspicious": suspicious,
+                "total": total,
+                "percent": 100 * total / source_totals[(source, label_type)],
+                "suspicious_rate": 100 * suspicious / total if total else 0,
+            }
+        )
+
+    print(f"\nCategorical summary for {category}:")
+    print(pd.DataFrame(rows).to_string(index=False))
 
 
 def main() -> None:
-    paysim_file = PROCESSED_DIR / "paysim_cleaned.csv"
-    ibm_file = PROCESSED_DIR / "ibm_cleaned.csv"
-    for cleaned_file in (paysim_file, ibm_file):
-        if not cleaned_file.is_file():
-            raise FileNotFoundError(
-                f"Cleaned dataset not found: {cleaned_file}. Run src/main.py first."
-            )
-
-    paysim = pd.read_csv(paysim_file)
-    ibm = pd.read_csv(ibm_file)
-
-    amount_summaries = (
-        ("PaySim", paysim, "amount", None, "isFraud"),
-        (
-            "IBM Amount Received",
-            ibm,
-            "Amount Received",
-            "Receiving Currency",
-            "Is Laundering",
-        ),
-        (
-            "IBM Amount Paid",
-            ibm,
-            "Amount Paid",
-            "Payment Currency",
-            "Is Laundering",
-        ),
-    )
-
-    for title, df, amount_column, currency_column, label_column in amount_summaries:
-        print(f"\nSummary statistics for {title}:")
-        print(
-            compute_summary_statistics(
-                df,
-                amount_column,
-                currency_column,
-                label_column,
-            ).to_string(index=False)
+    if not COMBINED_FILE.is_file():
+        raise FileNotFoundError(
+            f"Combined dataset not found: {COMBINED_FILE}. Run src/main.py first."
         )
 
-    category_summaries = (
-        ("PaySim transaction type", paysim, "type", "isFraud"),
-        ("IBM payment format", ibm, "Payment Format", "Is Laundering"),
-        ("IBM receiving currency", ibm, "Receiving Currency", "Is Laundering"),
-        ("IBM payment currency", ibm, "Payment Currency", "Is Laundering"),
-        ("IBM same bank", ibm, "Same Bank", "Is Laundering"),
-    )
-
-    for title, df, category_column, label_column in category_summaries:
-        print(f"\nCategorical summary for {title}:")
-        print(
-            summarize_category(df, category_column, label_column).to_string(
-                index=False
-            )
+    header = pd.read_csv(COMBINED_FILE, nrows=0)
+    missing_columns = sorted(set(REQUIRED_COLUMNS) - set(header.columns))
+    if missing_columns:
+        raise ValueError(
+            f"Combined dataset is missing required columns: {missing_columns}"
         )
+
+    amount_values: dict[tuple[str, str, str, int], list[np.ndarray]] = defaultdict(list)
+    amount_totals: dict[tuple[str, str, str, int], int] = defaultdict(int)
+    source_totals: dict[tuple[str, str], int] = defaultdict(int)
+    category_counts: dict[
+        str, dict[tuple[str, str, str], list[int]]
+    ] = {
+        "transaction_category": defaultdict(lambda: [0, 0]),
+        "currency": defaultdict(lambda: [0, 0]),
+    }
+
+    for chunk in pd.read_csv(
+        COMBINED_FILE,
+        usecols=REQUIRED_COLUMNS,
+        chunksize=CHUNK_SIZE,
+        dtype={
+            "transaction_amount": "float64",
+            "currency": "string",
+            "transaction_category": "string",
+            "dataset_source": "string",
+            "label_type": "string",
+            "is_suspicious": "int8",
+        },
+    ):
+        for column in ("currency", "transaction_category", "dataset_source", "label_type"):
+            chunk[column] = chunk[column].fillna("(Missing)").astype(str)
+
+        chunk["transaction_amount"] = pd.to_numeric(
+            chunk["transaction_amount"], errors="coerce"
+        )
+        chunk["is_suspicious"] = pd.to_numeric(
+            chunk["is_suspicious"], errors="raise"
+        ).astype(int)
+        if not chunk["is_suspicious"].isin([0, 1]).all():
+            raise ValueError("is_suspicious must contain only 0 and 1.")
+
+        source_groups = chunk.groupby(
+            ["dataset_source", "label_type"], sort=False
+        ).size()
+        for key, count in source_groups.items():
+            source_totals[key] += int(count)
+
+        amount_keys = [
+            "dataset_source",
+            "label_type",
+            "currency",
+            "is_suspicious",
+        ]
+        for key, group in chunk.groupby(amount_keys, sort=False, dropna=False):
+            amount_totals[key] += len(group)
+            values = group["transaction_amount"].dropna().to_numpy()
+            if values.size:
+                amount_values[key].append(values)
+
+        for category in category_counts:
+            grouped = chunk.groupby(
+                ["dataset_source", "label_type", category, "is_suspicious"],
+                sort=False,
+                dropna=False,
+            ).size()
+            for (source, label_type, value, outcome), count in grouped.items():
+                category_counts[category][
+                    (source, label_type, value)
+                ][outcome] += int(count)
+
+    amount_rows = []
+    for key, total_rows in sorted(amount_totals.items()):
+        values = np.concatenate(amount_values[key]) if amount_values[key] else np.array([])
+        source, label_type, currency, outcome = key
+        amount_rows.append(
+            {
+                "dataset_source": source,
+                "label_type": label_type,
+                "currency": currency,
+                "is_suspicious": outcome,
+                **_amount_summary(values, total_rows),
+            }
+        )
+
+    print("\nNumerical summary for transaction_amount:")
+    print(pd.DataFrame(amount_rows).to_string(index=False))
+
+    for category, counts in category_counts.items():
+        _print_categorical_summary(category, counts, source_totals)
 
 
 if __name__ == "__main__":
