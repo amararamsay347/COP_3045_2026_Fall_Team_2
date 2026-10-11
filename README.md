@@ -17,6 +17,9 @@ Raw and generated CSVs are ignored by Git.
 ## Setup
 
 Run from the project folder:
+# COP_3045_2026_Fall_Team_2
+
+## Run
 
 ```bash
 conda env create -f environment.yml
@@ -37,3 +40,5 @@ python "04-EDA/graphical_eda.py"
 
 - Cleaned CSVs: `data/processed/` and `03-Data cleaning/clean_data.csv`.
 - Charts: `04-EDA/output/`.
+python run_all.py
+```
