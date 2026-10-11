@@ -1,0 +1,6 @@
+name: cop3045
+channels:
+  - defaults
+dependencies:
+  - python=3.12
+  - pandas
