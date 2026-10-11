@@ -1,0 +1,6 @@
+/data/processed/
+/03-Data cleaning/clean_data.csv
+
+# Keep large raw datasets local.
+/data/paysim_data.csv
+/data/HI-Small_Trans.csv
