@@ -1,10 +1,13 @@
-# Import pandas to read and analyze the combined transaction dataset.
-from pathlib import Path
 from datetime import date
+from pathlib import Path
 
+# Import pandas to read and analyze the combined transaction dataset.
 import pandas as pd
 
 # Import Matplotlib and Seaborn to create the report visualizations.
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import seaborn as sns
 
@@ -16,32 +19,27 @@ from fpdf import FPDF
 # FILE PATHS
 # ------------------------------------------------------------
 
-# Resolve files from the repository root instead of depending on
-# which directory the script is launched from.
-PROJECT_DIR = Path(__file__).resolve().parents[1]
-
 # This is the combined analytical dataset created by src/main.py.
-data_file = PROJECT_DIR / "data" / "processed" / "combined_transactions.csv"
+report_dir = Path(__file__).resolve().parent
+data_file = report_dir.parent / "03-Data cleaning" / "clean_data.csv"
 
 # This is the final PDF report that this script will create.
-report_file = str(PROJECT_DIR / "05-Report" / "project_report.pdf")
+report_file = report_dir / "project_report.pdf"
 
 # These image files will temporarily store the visualizations
 # before they are inserted into the PDF report.
-chart1_file = str(PROJECT_DIR / "05-Report" / "suspicious_rate_by_source.png")
-chart2_file = str(PROJECT_DIR / "05-Report" / "suspicious_rate_by_category.png")
-chart3_file = str(PROJECT_DIR / "05-Report" / "median_amount_by_status.png")
+chart1_file = report_dir / "suspicious_rate_by_source.png"
+chart2_file = report_dir / "suspicious_rate_by_category.png"
+chart3_file = report_dir / "median_amount_by_status.png"
 
 
 # ------------------------------------------------------------
 # READ THE COMBINED DATASET
 # ------------------------------------------------------------
 
-# Generate the required combined dataset before running this report.
 if not data_file.is_file():
     raise FileNotFoundError(
-        f"Combined dataset not found: {data_file}. "
-        "Run 'python src/main.py' from the project root first."
+        f"Combined dataset not found: {data_file}. Run python src/main.py first."
     )
 
 # These are the columns used by the team's combined analytical dataset.
@@ -71,19 +69,14 @@ df = pd.read_csv(
     },
 )
 
-# PaySim does not define a currency; preserve those rows in currency groupings.
-df["currency"] = (
-    df["currency"].astype("object").fillna("N/A").astype("category")
-)
-df["dataset_source"] = (
-    df["dataset_source"]
-    .astype("object")
-    .replace({"PAYSim": "PaySim"})
-    .astype("category")
-)
+if df.empty:
+    raise ValueError(f"The combined dataset has no transaction rows: {data_file}")
 
-# Count all fields in the combined file, not only the report's selected columns.
-num_columns = len(pd.read_csv(data_file, nrows=0).columns)
+# PaySim has no defined currency. Keep its transactions in the amount summaries.
+df["currency"] = df["currency"].astype("category")
+if "N/A" not in df["currency"].cat.categories:
+    df["currency"] = df["currency"].cat.add_categories(["N/A"])
+df["currency"] = df["currency"].fillna("N/A")
 
 print("Combined dataset loaded successfully.")
 
@@ -94,6 +87,9 @@ print("Combined dataset loaded successfully.")
 
 # Count the total number of transactions.
 num_rows = len(df)
+
+# Count the total number of variables used in the analytical dataset.
+num_columns = len(pd.read_csv(data_file, nrows=0).columns)
 
 # Count how many transactions came from each original dataset.
 source_counts = df["dataset_source"].value_counts()
@@ -253,7 +249,8 @@ amount_summary_rows = []
 # non-suspicious transaction amounts.
 amount_status_rows = []
 
-# Calculate amount statistics separately by dataset and its reporting currency.
+# Calculate amount statistics separately for each dataset using
+# its most common currency.
 for row in main_currency_by_source.itertuples(index=False):
 
     source = row.dataset_source
@@ -484,7 +481,6 @@ plt.xlabel(
 plt.ylabel(
     "Median Transaction Amount (log scale)"
 )
-
 plt.yscale("log")
 
 plt.tight_layout()
@@ -534,12 +530,15 @@ finding4 = (
     + f"{highest_category_rate:.4f}%."
 )
 
+
 findings = [finding1, finding2, finding3, finding4]
 
 for source, group in amount_status_summary.groupby("display_source"):
     medians = group.set_index("status")["median_amount"]
     suspicious_median = medians["Suspicious"]
     non_suspicious_median = medians["Not Suspicious"]
+    if not (pd.notna(suspicious_median) and non_suspicious_median > 0):
+        continue
     findings.append(
         f"In {source}, the median suspicious transaction "
         f"({suspicious_median:,.2f}) was "
@@ -547,10 +546,10 @@ for source, group in amount_status_summary.groupby("display_source"):
         f"non-suspicious one ({non_suspicious_median:,.2f})."
     )
 
-top3 = category_summary.head(3)
+top_categories = category_summary.head(3)
 findings.append(
-    "The three highest-risk categories were "
-    + ", ".join(top3["display_category"])
+    "The categories with the highest suspicious rates were "
+    + ", ".join(top_categories["display_category"])
     + "."
 )
 
@@ -570,10 +569,10 @@ findings.append(
     "be read as relative, not as real-world fraud prevalence."
 )
 
-ibm_maximum = amount_summary.loc[
+ibm_amounts = amount_summary.loc[
     amount_summary["dataset_source"] == "IBM",
     "maximum",
-].iloc[0]
+]
 
 # ------------------------------------------------------------
 # CREATE THE PDF
@@ -608,6 +607,7 @@ pdf.multi_cell(
     10,
     "Financial Fraud and Money-Laundering Detection in Transaction Data",
     align="C",
+    new_x="LMARGIN",
 )
 
 pdf.set_font(
@@ -616,23 +616,23 @@ pdf.set_font(
     10,
 )
 
-pdf.set_x(pdf.l_margin)
 pdf.multi_cell(
     0,
     7,
     f"COP 3045 Python Programming II - Team 2 | {date.today():%B %d, %Y}",
     align="C",
+    new_x="LMARGIN",
 )
 
-pdf.set_x(pdf.l_margin)
 pdf.multi_cell(
     0,
     6,
     "PaySim "
-    + f"({source_counts.get('PaySim', 0):,} mobile-money transactions) "
+    + f"({source_counts.get('PAYSim', 0):,} mobile-money transactions) "
     + "and IBM AML HI-Small "
     + f"({source_counts.get('IBM', 0):,} bank transactions), both synthetic.",
     align="C",
+    new_x="LMARGIN",
 )
 
 pdf.ln(4)
@@ -674,9 +674,7 @@ pdf.cell(
 pdf.cell(
     0,
     8,
-    "Total variables: "
-    + str(num_columns)
-    + " (union of both datasets' columns)",
+    "Total variables: " + str(num_columns) + " (union of both datasets' columns)",
     ln=True,
 )
 
@@ -812,8 +810,10 @@ pdf.set_font(
 pdf.multi_cell(
     0,
     7,
-    "PaySim amounts have no currency (N/A). IBM amounts use its most "
-    "common currency (US Dollar)."
+    "Transaction amounts are summarized using the most common currency "
+    "within each dataset so that values from different currencies are "
+    "not mixed together. PaySim amounts are reported in simulation units.",
+    new_x="LMARGIN",
 )
 
 pdf.ln(4)
@@ -943,6 +943,7 @@ for row in amount_summary.itertuples(index=False):
         ln=True,
     )
 
+
 pdf.ln(5)
 pdf.set_font(
     "Helvetica",
@@ -987,19 +988,21 @@ for row in amount_summary.itertuples(index=False):
         pdf.cell(width, 8, value, border=1)
     pdf.ln()
 
-pdf.ln(3)
-pdf.set_font(
-    "Helvetica",
-    "",
-    9,
-)
-pdf.multi_cell(
-    0,
-    6,
-    "The IBM maximum of "
-    + f"{ibm_maximum:,.2f} is an extreme outlier, so the median is the "
-    "more reliable measure of a typical transaction.",
-)
+if not ibm_amounts.empty:
+    pdf.ln(3)
+    pdf.set_font(
+        "Helvetica",
+        "",
+        9,
+    )
+    pdf.multi_cell(
+        0,
+        6,
+        "The IBM maximum of "
+        + f"{ibm_amounts.iloc[0]:,.2f} is an extreme outlier, so the median is the "
+        "more reliable measure of a typical transaction.",
+        new_x="LMARGIN",
+    )
 
 pdf.ln(4)
 pdf.set_font(
@@ -1024,6 +1027,7 @@ pdf.multi_cell(
     6,
     "Counts provide context for the rate; categories with few transactions "
     "can have volatile rates.",
+    new_x="LMARGIN",
 )
 
 pdf.set_font(
@@ -1088,22 +1092,19 @@ pdf.cell(
 pdf.image(
     chart1_file,
     x=20,
-    w=140,
+    w=170,
 )
 
 pdf.set_x(pdf.l_margin)
 pdf.set_font("Helvetica", "", 9)
-pdf.multi_cell(
-    0,
-    6,
-    "Suspicious rates are shown separately for PaySim fraud and IBM "
-    "laundering labels; interpret each relative to its dataset.",
-)
-pdf.ln(2)
+pdf.multi_cell(0, 6, "Suspicious rates are shown separately for PaySim fraud and IBM laundering labels. Interpret each rate relative to its dataset.", new_x="LMARGIN")
+
 
 # ------------------------------------------------------------
 # SECOND VISUALIZATION
 # ------------------------------------------------------------
+
+pdf.add_page()
 
 pdf.set_font(
     "Helvetica",
@@ -1118,22 +1119,16 @@ pdf.cell(
     ln=True,
 )
 
-pdf.set_x(pdf.l_margin)
-
 # Insert the category graph.
 pdf.image(
     chart2_file,
     x=15,
-    w=170,
+    w=180,
 )
+
 pdf.set_x(pdf.l_margin)
 pdf.set_font("Helvetica", "", 9)
-pdf.multi_cell(
-    0,
-    6,
-    "Categories are ordered by suspicious rate; category rates should be "
-    "read alongside their transaction counts.",
-)
+pdf.multi_cell(0, 6, "Categories are ordered by suspicious rate. Read each rate alongside its transaction count.", new_x="LMARGIN")
 
 
 # ------------------------------------------------------------
@@ -1155,28 +1150,24 @@ pdf.cell(
     ln=True,
 )
 
-pdf.set_x(pdf.l_margin)
-
 # Insert the median amount graph.
 pdf.image(
     chart3_file,
     x=15,
-    w=170,
-)
-pdf.set_x(pdf.l_margin)
-pdf.set_font("Helvetica", "", 9)
-pdf.multi_cell(
-    0,
-    6,
-    "The logarithmic vertical axis keeps the PaySim and IBM medians "
-    "readable on the same chart.",
+    w=180,
 )
 
 pdf.set_x(pdf.l_margin)
+pdf.set_font("Helvetica", "", 9)
+pdf.multi_cell(0, 6, "The logarithmic vertical axis keeps the PaySim and IBM medians readable on the same chart.", new_x="LMARGIN")
+
 
 # ------------------------------------------------------------
 # KEY ANALYTICAL FINDINGS
 # ------------------------------------------------------------
+
+# Start a new page for the automatically calculated findings.
+pdf.add_page()
 
 pdf.set_font(
     "Helvetica",
@@ -1184,7 +1175,6 @@ pdf.set_font(
     14,
 )
 
-pdf.set_x(pdf.l_margin)
 pdf.cell(
     0,
     10,
@@ -1198,13 +1188,10 @@ pdf.set_font(
     11,
 )
 
+# Add each analytical finding to the report.
 for finding in findings:
-    pdf.multi_cell(
-        0,
-        7,
-        finding,
-    )
-    pdf.ln(2)
+    pdf.multi_cell(0, 8, finding, new_x="LMARGIN")
+    pdf.ln(3)
 
 
 # ------------------------------------------------------------
