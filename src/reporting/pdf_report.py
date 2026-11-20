@@ -34,13 +34,12 @@ class PDFReport:
         pdf.multi_cell(0, 10, self._title, align="C")
         pdf.set_font("Helvetica", "", 10)
         pdf.set_x(pdf.l_margin)
-        pdf.multi_cell(0, 6, f"COP 3045 Python Programming II - Team 2 | {date.today():%B %d, %Y}", align="C")
+        pdf.multi_cell(0, 6, f"Generated {date.today():%B %d, %Y}", align="C")
         pdf.set_x(pdf.l_margin)
         pdf.multi_cell(
             0,
             6,
-            "PaySim mobile-money transactions and IBM AML bank transactions; "
-            "both datasets are synthetic.",
+            "Automated analysis of the combined transaction dataset.",
             align="C",
         )
 
@@ -80,7 +79,12 @@ class PDFReport:
         pdf.set_font("Helvetica", "B", 14)
         pdf.cell(0, 10, "2. Summary Statistics", ln=True)
         pdf.set_font("Helvetica", "", 10)
-        pdf.multi_cell(0, 7, "PaySim amounts have no currency (N/A). IBM amounts use their native, most-common currency.")
+        pdf.multi_cell(
+            0,
+            7,
+            "Amount summaries use the most common currency within each dataset "
+            "source; values across different currencies are not combined.",
+        )
 
         pdf.ln(4)
         self._amount_table(metrics.amount_summary)
@@ -113,18 +117,14 @@ class PDFReport:
                 pdf.cell(width, 8, value, border=1)
             pdf.ln()
 
-        ibm_amounts = metrics.amount_summary.loc[
-            metrics.amount_summary["dataset_source"] == "IBM", "maximum"
-        ]
-        if not ibm_amounts.empty:
+        if not metrics.amount_summary.empty:
             pdf.ln(3)
             pdf.set_font("Helvetica", "", 9)
             pdf.multi_cell(
                 0,
                 6,
-                f"The IBM maximum of {ibm_amounts.iloc[0]:,.2f} is an extreme "
-                "outlier, so the median is a more reliable measure of a typical "
-                "transaction.",
+                "Maximum values can be affected by unusually large transactions; "
+                "compare them with the median when describing a typical amount.",
             )
 
         pdf.ln(3)
@@ -151,17 +151,29 @@ class PDFReport:
         pdf.add_page()
         pdf.set_font("Helvetica", "B", 14)
         pdf.cell(0, 10, "3. Visualizations", ln=True)
-        self._chart_page(pdf, "Suspicious Transaction Rate by Dataset", chart_files["source"], "Suspicious rates are shown separately for PaySim fraud and IBM laundering labels.")
+        self._chart_page(
+            pdf,
+            "Suspicious Transaction Rate by Dataset",
+            chart_files["source"],
+            "Rates are shown by dataset source; interpret them in the context "
+            "of each source's label definition.",
+        )
 
         pdf.add_page()
         self._chart_page(pdf, "Suspicious Transaction Rate by Category", chart_files["category"], "Category rates should be read alongside transaction counts.")
         pdf.add_page()
-        self._chart_page(pdf, "Median Transaction Amount by Suspicious Status", chart_files["status"], "Log scale keeps PaySim and IBM medians readable on the same chart.")
+        self._chart_page(
+            pdf,
+            "Median Transaction Amount by Suspicious Status",
+            chart_files["status"],
+            "Each source uses its most common currency. The logarithmic scale "
+            "supports comparison when amount ranges differ.",
+        )
 
         pdf.set_font("Helvetica", "B", 14)
         pdf.cell(0, 10, "4. Key Analytical Findings", ln=True)
         pdf.set_font("Helvetica", "", 11)
-        for finding in self._findings(frame, metrics):
+        for finding in self._findings(frame, total_columns, metrics):
             pdf.multi_cell(0, 7, finding)
             pdf.ln(2)
 
@@ -188,14 +200,19 @@ class PDFReport:
         pdf.set_font("Helvetica", "", 9)
         pdf.multi_cell(0, 6, caption)
 
-    def _findings(self, frame: pd.DataFrame, metrics: ReportMetrics) -> list[str]:
+    def _findings(
+        self,
+        frame: pd.DataFrame,
+        total_columns: int,
+        metrics: ReportMetrics,
+    ) -> list[str]:
         num_rows = len(frame)
         suspicious = int(frame["is_suspicious"].sum())
         overall_rate = suspicious / num_rows * 100 if num_rows else 0.0
         highest_source = metrics.source_summary.loc[metrics.source_summary["suspicious_rate"].idxmax()]
         highest_category = metrics.category_summary.iloc[0]
         findings = [
-            f"The combined analytical dataset contains {num_rows:,} transactions and {len(frame.columns)} selected variables.",
+            f"The combined analytical dataset contains {num_rows:,} transactions and {total_columns} variables.",
             f"There were {suspicious:,} suspicious transactions, giving an overall suspicious rate of {overall_rate:.4f}%.",
             f"{highest_source['dataset_source']} had the highest dataset suspicious rate at {highest_source['suspicious_rate']:.4f}%.",
             f"The highest-risk category was {highest_category['display_category']} at {highest_category['suspicious_rate']:.4f}%.",
@@ -217,14 +234,8 @@ class PDFReport:
 
         top_categories = metrics.category_summary.head(3)["display_category"].tolist()
         findings.append("The three highest-risk categories were " + ", ".join(top_categories) + ".")
-        ibm_ach = metrics.category_summary.loc[
-            (metrics.category_summary["dataset_source"] == "IBM")
-            & (metrics.category_summary["transaction_category"] == "ACH")
-        ]
-        if not ibm_ach.empty:
-            findings.append(
-                "IBM ACH transactions had a suspicious rate of "
-                f"{ibm_ach.iloc[0]['suspicious_rate']:.2f}%."
-            )
-        findings.append("Limitation: synthetic and highly imbalanced data makes these rates relative indicators, not real-world prevalence estimates.")
+        findings.append(
+            "Limitation: suspicious rates depend on the dataset composition and "
+            "should not be interpreted as real-world prevalence estimates."
+        )
         return findings

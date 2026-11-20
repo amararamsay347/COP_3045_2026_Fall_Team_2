@@ -6,6 +6,8 @@ import pandas as pd
 
 from src.reporting.loader import load_combined_data
 from src.reporting.application import ReportApplication
+from src.reporting.analysis import build_metrics
+from src.reporting.pdf_report import PDFReport
 
 
 def test_loader_and_report() -> None:
@@ -19,11 +21,14 @@ def test_loader_and_report() -> None:
             "dataset_source": ["PAYSim", "IBM"],
             "label_type": ["fraud", "laundering"],
             "is_suspicious": [0, 1],
+            "additional_dataset_field": ["first", "second"],
         }).to_csv(data_file, index=False)
 
         frame, total_columns = load_combined_data(data_file)
         assert len(frame) == 2
-        assert total_columns == 6
+        assert total_columns == 7
+        findings = PDFReport()._findings(frame, total_columns, build_metrics(frame))
+        assert "7 variables" in findings[0]
 
         output = ReportApplication(data_file, root / "report").run()
         assert output.is_file()
