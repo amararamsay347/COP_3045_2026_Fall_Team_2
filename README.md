@@ -27,7 +27,21 @@ Place these in `data/` (ignored by Git):
 ## Setup and run
 conda env create -f environment.yml
 conda activate cop3045
-python run_all.py
+python main.py
+
+`main.py` runs data preparation, summary statistics, graphical EDA, and PDF
+report generation. `run_all.py` remains available as a backward-compatible
+alias for the same workflow.
+
+To run only report generation after a combined dataset has already been created:
+
+```powershell
+python 05-Report/generate_report.py
+```
+
+The reusable reporting implementation is in `src/reporting/`. Its `ReportApplication`
+class can accept another combined CSV and output directory, making the workflow
+extendable for future datasets or teams.
 
 ## Outputs
 - Cleaned data: `03-Data cleaning/clean_data.csv`
