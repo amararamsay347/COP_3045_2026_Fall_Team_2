@@ -226,6 +226,16 @@ class TransactionDataProcessor:
         self._paysim_data = clean_paysim(self._paysim_path)
         self._ibm_data = clean_ibm(self._ibm_path)
 
+    def get_cleaned_data(self) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Return copies of the cleaned PaySim and IBM datasets."""
+
+        if self._paysim_data is None or self._ibm_data is None:
+            raise ValueError(
+                "Datasets must be cleaned before accessing them."
+            )
+
+        return self._paysim_data.copy(), self._ibm_data.copy()
+
     def combine_data(self) -> pd.DataFrame:
         """Combine the previously cleaned datasets."""
 
