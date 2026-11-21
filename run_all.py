@@ -1,9 +1,9 @@
-from pathlib import Path
 import subprocess
 import sys
 
+from src.paths import PROJECT_DIR, REPORT_FILE
 
-PROJECT_ROOT = Path(__file__).resolve().parent
+
 STEPS = (
     "src/main.py",
     "src/summary_statistics.py",
@@ -16,12 +16,12 @@ def main() -> None:
     for step in STEPS:
         print(f"=== Running {step} ===", flush=True)
         subprocess.run(
-            [sys.executable, str(PROJECT_ROOT / step)],
-            cwd=PROJECT_ROOT,
+            [sys.executable, str(PROJECT_DIR / step)],
+            cwd=PROJECT_DIR,
             check=True,
         )
 
-    print("Done. Report: 05-Report/project_report.pdf")
+    print(f"Done. Report: {REPORT_FILE.relative_to(PROJECT_DIR).as_posix()}")
 
 
 if __name__ == "__main__":
