@@ -35,6 +35,12 @@ def find_dataset(
     )
 
 
+def _print_section(heading: str, value: object) -> None:
+    """Print a named result from the cleaning stage."""
+    print(f"\n{heading}:")
+    print(value)
+
+
 def main() -> None:
     """Run the transaction data-processing workflow."""
 
@@ -46,8 +52,7 @@ def main() -> None:
         ibm_path=ibm_file
     )
 
-    # Inspect a sample of the raw PaySim CSV.
-        # Inspect a sample of the raw PaySim dataset.
+    # Preview the raw PaySim sample before cleaning the full datasets.
     inspect_paysim(paysim_file)
 
     print("\n" + "=" * 50 + "\n")
@@ -65,51 +70,24 @@ def main() -> None:
     paysim.to_csv(paysim_output, index=False)
     ibm.to_csv(ibm_output, index=False)
 
-    # Show the cleaned PaySim preview and overall shape.
-    print("\nPaySim cleaned data head:")
-    print(paysim.head())
+    for dataset_name, transactions in (("PaySim", paysim), ("IBM", ibm)):
+        _print_section(f"{dataset_name} cleaned data head", transactions.head())
+        _print_section(f"{dataset_name} cleaned data shape", transactions.shape)
 
-    print("\nPaySim cleaned data shape:")
-    print(paysim.shape)
-
-    # Show the cleaned IBM preview and overall shape.
-    print("\nIBM cleaned data head:")
-    print(ibm.head())
-
-    print("\nIBM cleaned data shape:")
-    print(ibm.shape)
-
-    # Print the distribution of fraudulent and legitimate PaySim transactions.
-    print("\nPaySim fraud labels:")
-    print(paysim["isFraud"].value_counts())
-
-    # Print the distribution of laundering and non-laundering IBM transactions.
-    print("\nIBM laundering labels:")
-    print(ibm["Is Laundering"].value_counts())
-
-    # Summarize the different transaction categories in PaySim.
-    print("\nPaySim transaction types:")
-    print(paysim["type"].value_counts())
-
-    # Summarize the different payment formats in IBM.
-    print("\nIBM payment formats:")
-    print(ibm["Payment Format"].value_counts())
-
-    # Summarize the derived transaction-hour variable for PaySim.
-    print("\nPaySim hours:")
-    print(paysim["hour"].describe())
-
-    # Summarize the derived transaction-hour variable for IBM.
-    print("\nIBM hours:")
-    print(ibm["hour"].describe())
+    _print_section("PaySim fraud labels", paysim["isFraud"].value_counts())
+    _print_section("IBM laundering labels", ibm["Is Laundering"].value_counts())
+    _print_section("PaySim transaction types", paysim["type"].value_counts())
+    _print_section("IBM payment formats", ibm["Payment Format"].value_counts())
+    _print_section("PaySim hours", paysim["hour"].describe())
+    _print_section("IBM hours", ibm["hour"].describe())
 
     print(f"\nCleaned PaySim dataset saved to: {paysim_output}")
     print(f"Cleaned IBM dataset saved to: {ibm_output}")
 
     # Export the combined cleaned data required by the graphical EDA assignment.
-    df = processor.combine_data()
+    combined_transactions = processor.combine_data()
     CLEAN_DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(CLEAN_DATA_FILE, index=False, chunksize=100_000)
+    combined_transactions.to_csv(CLEAN_DATA_FILE, index=False, chunksize=100_000)
     print(f"\nCombined cleaned dataset saved to: {CLEAN_DATA_FILE}")
 
 
