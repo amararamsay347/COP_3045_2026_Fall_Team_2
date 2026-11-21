@@ -1,88 +1,73 @@
 # COP_3045_2026_Fall_Team_2
 
-# Data Processing
+## Overview
 
-This branch contains the data processing workflow for our financial fraud and money laundering analysis project. It includes two Python files: `data_processing.py` and `main.py`.
-
-## Files
-
-### 1. `data_processing.py`
-
-Contains functions for inspecting, cleaning, and combining the PAYSim and IBM datasets.
-
-**Data Inspection**
-- `inspect_paysim()`: Examines the first 5,000 PAYSim records, including columns, data types, missing values, duplicates, and dataset shape.
-- `inspect_ibm()`: Performs the same inspection for each IBM CSV file in the specified folder.
-
-**Data Cleaning**
-- `clean_paysim()`: Selects relevant transaction columns, standardizes transaction types, and creates additional features such as transaction hour and account balance changes.
-- `clean_ibm()`: Selects relevant financial columns, converts timestamps to datetime, standardizes currencies and payment formats, and creates transaction hour and same-bank indicators.
-
-**Dataset Combination**
-- `combine_datasets()`: Combines both cleaned datasets into a single analytical dataset using `pd.concat()`.
-- Creates common columns such as `transaction_amount`, `currency`, `transaction_category`, and `is_suspicious`.
-- Preserves the original columns and identifies each record's source and label type.
-
-### 2. `main.py`
-
-Serves as the main entry point for the data processing workflow.
-
-- Imports and executes the functions from `data_processing.py`.
-- Inspects and cleans both datasets.
-- Displays cleaned data previews and dataset dimensions.
-- Generates summary statistics for fraud labels, laundering labels, transaction categories, and transaction hours.
-- Combines both datasets into one analytical dataset.
-- Exports the final dataset to `data/processed/combined_transactions.csv`.
-
-## How to Run
-
-From the project root directory, run:
-
-```bash
-python -m src.main
-```
-
-**Requirements:**
-- Python 3
-- Pandas
-- Original PAYSim and IBM CSV files in their expected directories.
-
-## Output
-
-The workflow generates:
-
-`data/processed/combined_transactions.csv`
-
-This file contains the combined financial transactions, standardized analytical fields, derived features, and suspicious transaction labels.
-
-**Note:** PAYSim identifies fraudulent transactions, while IBM identifies money laundering. The `label_type` column preserves this distinction.
-
-## Purpose
-
-The goal of this branch is to prepare both datasets for exploratory data analysis (EDA), transaction pattern comparisons, and further investigation of suspicious financial activity.
-# COP3045 Fall 2026 - Team 2
-
-Cleans and analyzes PaySim (fraud) and IBM HI-Small (money-laundering) transaction data, then generates a PDF report. The two datasets are combined into one analytical table because both are synthetic financial-transaction data with fraud/laundering labels, which lets us compare suspicious-transaction patterns across sources.
+This project cleans and analyzes PaySim synthetic fraud data and IBM HI-Small
+synthetic money-laundering data. It combines the cleaned transactions for
+exploratory analysis and generates charts and a PDF report.
 
 ## Datasets
-Place the raw CSVs at `data/paysim_data.csv` and `data/HI-Small_Trans.csv`.
-The pipeline also accepts the existing download locations
-`data/ibm/paysim_data.csv` and `data/IBM_small_HI_data/HI-Small_Trans.csv`.
 
-## Setup and run
+Download link for the **PAYSIM** 'Synthetic Finanical Datasets for Fraud Detection':
+[PAYSIM Synthetic Finanical Datasets for Fraud Detection](https://www.kaggle.com/datasets/ealaxi/paysim1)
+
+The IBM HI-Small transaction dataset is already included in the repository at
+`data/ibm/IBM_small_HI_data/HI-Small_Trans.csv`.
+
+The pipeline looks for datasets in these default locations:
+
+- `data/paysim_data.csv`
+- `data/HI-Small_Trans.csv`
+
+Or in the alternate locations:
+
+- `data/ibm/paysim_data.csv`
+- `data/ibm/IBM_small_HI_data/HI-Small_Trans.csv`
+
+## Setup
+
+Create and activate the Conda environment from the project root:
 
 ```bash
 conda env create -f environment.yml
 conda activate cop3045
+```
+
+If the environment already exists, activate it.
+
+## Run the project
+
+From the project root, run the full workflow:
+
+```bash
 python run_all.py
 ```
 
-If the `cop3045` environment already exists, start with `conda activate cop3045`.
-To rebuild just the PDF and its charts after cleaning, run
-`python 05-Report/generate_report.py`. The report and graphical EDA read the
-same combined CSV at `03-Data cleaning/clean_data.csv`.
+The workflow cleans both datasets, produces summary statistics, generates
+exploratory data analysis charts, and creates the PDF report. To regenerate
+just the report after the cleaned data is available, run:
+
+```bash
+python 05-Report/generate_report.py
+```
 
 ## Outputs
-- Cleaned data: `03-Data cleaning/clean_data.csv`
-- Charts: `04-EDA/output/`
-- Report: `05-Report/project_report.pdf`
+
+- Cleaned PaySim data: `data/processed/paysim_cleaned.csv`
+- Cleaned IBM data: `data/processed/ibm_cleaned.csv`
+- Combined data: `03-Data cleaning/clean_data.csv`
+- EDA charts: `04-EDA/output/`
+- PDF report: `05-Report/project_report.pdf`
+
+PaySim labels fraudulent transactions, while IBM labels money-laundering
+transactions. The combined data preserves the source and label type so results
+from the two datasets can be interpreted separately.
+
+## Project structure
+
+- `run_all.py` runs the full workflow in order.
+- `src/data_processing.py` cleans and combines the transaction datasets.
+- `src/main.py` runs data cleaning and exports the cleaned and combined data.
+- `src/summary_statistics.py` produces summary statistics.
+- `04-EDA/` contains the graphical EDA workflow and chart output.
+- `05-Report/` contains the PDF report generator and report output.
