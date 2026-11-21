@@ -8,7 +8,7 @@ DATA_DIR = PROJECT_DIR / "data"
 PAYSIM_FILE = DATA_DIR / "paysim_data.csv"
 IBM_FILE = DATA_DIR / "HI-Small_Trans.csv"
 LOCAL_PAYSIM_FILE = DATA_DIR / "ibm" / PAYSIM_FILE.name
-LOCAL_IBM_FILE = DATA_DIR / "IBM_small_HI_data" / IBM_FILE.name
+LOCAL_IBM_FILE = DATA_DIR / "ibm" / "IBM_small_HI_data" / IBM_FILE.name
 
 PROCESSED_DIR = DATA_DIR / "processed"
 PAYSIM_CLEANED_FILE = PROCESSED_DIR / "paysim_cleaned.csv"
