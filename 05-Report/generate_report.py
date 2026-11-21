@@ -16,8 +16,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--data",
         type=Path,
-        default=PROJECT_ROOT / "data" / "processed" / "combined_transactions.csv",
-        help="Combined CSV input (default: data/processed/combined_transactions.csv)",
+        default=PROJECT_ROOT / "03-Data cleaning" / "clean_data.csv",
+        help="Combined CSV input (default: 03-Data cleaning/clean_data.csv)",
     )
     parser.add_argument(
         "--output-dir",

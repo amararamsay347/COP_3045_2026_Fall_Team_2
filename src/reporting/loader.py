@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 REQUIRED_COLUMNS = (
@@ -53,7 +52,7 @@ def load_combined_data(data_file: Path) -> tuple[pd.DataFrame, int]:
     )
     if frame["transaction_amount"].isna().any():
         raise ValueError("transaction_amount contains missing or non-numeric values.")
-    if not np.isfinite(frame["transaction_amount"]).all():
+    if frame["transaction_amount"].isin([float("inf"), float("-inf")]).any():
         raise ValueError("transaction_amount contains infinite values.")
     if frame["is_suspicious"].isna().any():
         raise ValueError("is_suspicious contains missing or non-numeric values.")
