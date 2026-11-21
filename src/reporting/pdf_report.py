@@ -1,6 +1,6 @@
 """PDF report construction."""
 
-from datetime import date
+from datetime import datetime, timezone
 from pathlib import Path
 import pandas as pd
 from fpdf import FPDF
@@ -14,6 +14,9 @@ class PDFReport:
     def __init__(self, title: str = "Financial Fraud and Money-Laundering Detection") -> None:
         self._title = title
         self._pdf = FPDF()
+        self._pdf.set_creation_date(
+            datetime(2000, 1, 1, tzinfo=timezone.utc)
+        )
         self._pdf.set_auto_page_break(auto=True, margin=15)
 
     def build(
@@ -34,7 +37,7 @@ class PDFReport:
         pdf.multi_cell(0, 10, self._title, align="C")
         pdf.set_font("Helvetica", "", 10)
         pdf.set_x(pdf.l_margin)
-        pdf.multi_cell(0, 6, f"Generated {date.today():%B %d, %Y}", align="C")
+        pdf.multi_cell(0, 6, "Automated transaction analysis report", align="C")
         pdf.set_x(pdf.l_margin)
         pdf.multi_cell(
             0,

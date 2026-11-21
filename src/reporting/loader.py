@@ -1,6 +1,8 @@
 """Data loading and validation for automated reports."""
 
 from pathlib import Path
+
+import numpy as np
 import pandas as pd
 
 REQUIRED_COLUMNS = (
@@ -43,15 +45,35 @@ def load_combined_data(data_file: Path) -> tuple[pd.DataFrame, int]:
     if frame.empty:
         raise ValueError("Combined dataset contains no transaction rows.")
 
-    frame["transaction_amount"] = pd.to_numeric(frame["transaction_amount"], errors="coerce")
-    frame["is_suspicious"] = pd.to_numeric(frame["is_suspicious"], errors="coerce")
-    if not frame["is_suspicious"].dropna().isin([0, 1]).all():
+    frame["transaction_amount"] = pd.to_numeric(
+        frame["transaction_amount"], errors="coerce"
+    )
+    frame["is_suspicious"] = pd.to_numeric(
+        frame["is_suspicious"], errors="coerce"
+    )
+    if frame["transaction_amount"].isna().any():
+        raise ValueError("transaction_amount contains missing or non-numeric values.")
+    if not np.isfinite(frame["transaction_amount"]).all():
+        raise ValueError("transaction_amount contains infinite values.")
+    if frame["is_suspicious"].isna().any():
+        raise ValueError("is_suspicious contains missing or non-numeric values.")
+    if not frame["is_suspicious"].isin([0, 1]).all():
         raise ValueError("is_suspicious must contain only 0 and 1 values.")
 
+    if frame["dataset_source"].isna().any():
+        raise ValueError("dataset_source contains missing values.")
     frame["currency"] = frame["currency"].fillna("N/A").astype(str)
-    frame["dataset_source"] = frame["dataset_source"].astype(str).replace({"PAYSim": "PaySim"})
+    frame["dataset_source"] = (
+        frame["dataset_source"]
+        .astype("string")
+        .str.strip()
+        .replace({"PAYSim": "PaySim"})
+    )
+    if frame["dataset_source"].eq("").any():
+        raise ValueError("dataset_source contains empty values.")
+    frame["dataset_source"] = frame["dataset_source"].astype(str)
     frame["transaction_category"] = frame["transaction_category"].fillna("Unknown").astype(str)
     frame["label_type"] = frame["label_type"].fillna("Unknown").astype(str)
-    frame["is_suspicious"] = frame["is_suspicious"].fillna(0).astype("int8")
+    frame["is_suspicious"] = frame["is_suspicious"].astype("int8")
 
     return frame, total_columns

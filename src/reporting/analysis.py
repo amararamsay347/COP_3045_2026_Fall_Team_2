@@ -23,7 +23,9 @@ def summarize_sources(frame: pd.DataFrame) -> pd.DataFrame:
         .rename(columns={"count": "transaction_count", "sum": "suspicious_count", "mean": "suspicious_rate"})
     )
     summary["suspicious_rate"] *= 100
-    return summary
+    return summary.sort_values(
+        "dataset_source", kind="stable"
+    ).reset_index(drop=True)
 
 
 def summarize_categories(frame: pd.DataFrame) -> pd.DataFrame:
@@ -40,7 +42,11 @@ def summarize_categories(frame: pd.DataFrame) -> pd.DataFrame:
         + " - "
         + summary["transaction_category"].astype(str)
     )
-    return summary.sort_values("suspicious_rate", ascending=False)
+    return summary.sort_values(
+        ["suspicious_rate", "dataset_source", "transaction_category"],
+        ascending=[False, True, True],
+        kind="stable",
+    ).reset_index(drop=True)
 
 
 def summarize_amounts(frame: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -49,9 +55,18 @@ def summarize_amounts(frame: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
         frame.groupby(["dataset_source", "currency"], observed=True)
         .size()
         .reset_index(name="transaction_count")
-        .sort_values(["dataset_source", "transaction_count"], ascending=[True, False])
+        .sort_values(
+            ["dataset_source", "transaction_count", "currency"],
+            ascending=[True, False, True],
+            kind="stable",
+        )
     )
-    main_currencies = currency_counts.groupby("dataset_source", observed=True).first().reset_index()
+    main_currencies = (
+        currency_counts.groupby("dataset_source", observed=True)
+        .first()
+        .reset_index()
+        .sort_values("dataset_source", kind="stable")
+    )
 
     amount_rows: list[dict[str, object]] = []
     status_rows: list[dict[str, object]] = []
