@@ -1,5 +1,6 @@
-import pandas as pd
 from pathlib import Path
+
+import pandas as pd
 
 
 def load_csv(
@@ -28,14 +29,14 @@ def load_csv(
             f"The CSV file is empty: {file_path}"
         ) from error
 
-    except ValueError as error:
-        raise ValueError(
-            f"Invalid or missing columns in {file_path}: {error}"
-        ) from error
-
     except (OSError, pd.errors.ParserError) as error:
         raise ValueError(
             f"Unable to read CSV file {file_path}: {error}"
+        ) from error
+
+    except ValueError as error:
+        raise ValueError(
+            f"Invalid or missing columns in {file_path}: {error}"
         ) from error
 
     return df
@@ -99,20 +100,55 @@ def inspect_ibm(folder_path: str | Path) -> None:
         display_dataset_info(df, file.name)
 
 
+def _check_transactions(
+    transactions: pd.DataFrame,
+    dataset_name: str,
+    label_column: str,
+    numeric_columns: list[str],
+) -> None:
+    """Check selected raw fields before deriving features.
+
+    Missing non-label values and repeated rows are reported and retained.
+    Matching selected fields do not establish that two transactions are identical.
+    Missing or nonbinary labels, malformed numeric values, and infinity stop cleaning.
+    """
+    if transactions.empty:
+        raise ValueError(f"{dataset_name} contains no transaction rows.")
+
+    invalid_labels = int((~transactions[label_column].isin([0, 1])).sum())
+    if invalid_labels:
+        raise ValueError(
+            f"{dataset_name}: {label_column!r} must contain 0 or 1. "
+            f"Found {invalid_labels:,} missing or invalid values."
+        )
+
+    for column in numeric_columns:
+        values = transactions[column]
+        if not pd.api.types.is_numeric_dtype(values):
+            raise ValueError(f"{dataset_name}: {column!r} must be numeric.")
+        infinite_count = int(values.isin([float("inf"), float("-inf")]).sum())
+        if infinite_count:
+            raise ValueError(
+                f"{dataset_name}: {column!r} contains {infinite_count:,} infinite values."
+            )
+
+    missing_counts = transactions.isna().sum()
+    duplicate_count = transactions.duplicated().sum()
+    print(f"\n{dataset_name} data quality across {len(transactions):,} rows:")
+    print("Missing values in selected fields:", missing_counts[missing_counts.gt(0)].to_dict())
+    print(f"Repeated rows across selected fields: {duplicate_count:,} (retained)")
+
+
 # Keep only the relevant PAYSim fields and create derived features useful for fraud detection.
 def clean_paysim(file_path: str | Path) -> pd.DataFrame:
     """Load and clean PaySim transactions and create derived features."""
     # Select the columns needed for analysis and reduce memory use for the dataset.
-    columns = ["step",
-               "type",
-               "amount",
-               "oldbalanceOrg",
-               "newbalanceOrig",
-               "oldbalanceDest",
-               "newbalanceDest",
-               "isFraud"]
-
-    df = load_csv(file_path, columns=columns)
+    numeric_columns = [
+        "step", "amount", "oldbalanceOrg", "newbalanceOrig",
+        "oldbalanceDest", "newbalanceDest",
+    ]
+    df = load_csv(file_path, columns=[*numeric_columns, "type", "isFraud"])
+    _check_transactions(df, "PaySim", "isFraud", numeric_columns)
 
     # Standardize transaction labels so the values are consistent and easy to compare.
     df["type"] = df["type"].str.strip().str.upper()
@@ -147,6 +183,8 @@ def clean_ibm(file_path: str | Path) -> pd.DataFrame:
     ]
 
     df = load_csv(file_path, columns=columns)
+
+    _check_transactions(df, "IBM", "Is Laundering", ["Amount Received", "Amount Paid"])
 
     # Convert timestamps to a proper datetime type for time-based analysis.
     try:
@@ -226,25 +264,20 @@ class TransactionDataProcessor:
         self._paysim_data = clean_paysim(self._paysim_path)
         self._ibm_data = clean_ibm(self._ibm_path)
 
+    def _require_cleaned_data(
+        self, operation: str
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Return the internal frames once both datasets have been cleaned."""
+        if self._paysim_data is None or self._ibm_data is None:
+            raise ValueError(f"Datasets must be cleaned before {operation}.")
+        return self._paysim_data, self._ibm_data
+
     def get_cleaned_data(self) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Return copies of the cleaned PaySim and IBM datasets."""
-
-        if self._paysim_data is None or self._ibm_data is None:
-            raise ValueError(
-                "Datasets must be cleaned before accessing them."
-            )
-
-        return self._paysim_data.copy(), self._ibm_data.copy()
+        paysim, ibm = self._require_cleaned_data("accessing them")
+        return paysim.copy(), ibm.copy()
 
     def combine_data(self) -> pd.DataFrame:
         """Combine the previously cleaned datasets."""
-
-        if self._paysim_data is None or self._ibm_data is None:
-            raise ValueError(
-                "Datasets must be cleaned before combining."
-            )
-
-        return combine_datasets(
-            self._paysim_data,
-            self._ibm_data
-        )
+        paysim, ibm = self._require_cleaned_data("combining")
+        return combine_datasets(paysim, ibm)
