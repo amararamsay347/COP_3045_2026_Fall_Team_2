@@ -1,11 +1,14 @@
 from collections.abc import Iterator
 from pathlib import Path
+import sys
 
 import pandas as pd
 
 
-PROJECT_DIR = Path(__file__).resolve().parents[1]
-PROCESSED_DIR = PROJECT_DIR / "data" / "processed"
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from src.paths import IBM_CLEANED_FILE, PAYSIM_CLEANED_FILE, PROCESSED_DIR
 
 
 def _require_columns(transactions: pd.DataFrame, *columns: str) -> None:
@@ -118,10 +121,10 @@ class TransactionSummary:
     def __init__(self, processed_dir: Path) -> None:
         """Load and validate both cleaned transaction files from processed_dir."""
         self._paysim = _read_cleaned_transactions(
-            processed_dir / "paysim_cleaned.csv", ("amount", "type", "isFraud")
+            processed_dir / PAYSIM_CLEANED_FILE.name, ("amount", "type", "isFraud")
         )
         self._ibm = _read_cleaned_transactions(
-            processed_dir / "ibm_cleaned.csv",
+            processed_dir / IBM_CLEANED_FILE.name,
             (
                 "Amount Received",
                 "Receiving Currency",

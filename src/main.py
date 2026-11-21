@@ -1,38 +1,22 @@
 from pathlib import Path
 import sys
 
-# Resolve the project root so the script can find data files and package imports reliably.
-PROJECT_DIR = Path(__file__).resolve().parents[1]
-
 # Allow the project package to be imported when this script is run directly.
 if __package__ in (None, ""):
-    sys.path.insert(0, str(PROJECT_DIR))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-# Import the dataset inspection and cleaning functions used by the main workflow.
+from src.data_loading import find_dataset
 from src.data_processing import TransactionDataProcessor, inspect_paysim
-
-
-# Store the dataset paths in one place so they are easy to update later.
-PAYSIM_FILE = PROJECT_DIR / "data" / "paysim_data.csv"
-IBM_FILE = PROJECT_DIR / "data" / "HI-Small_Trans.csv"
-LOCAL_PAYSIM_FILE = PROJECT_DIR / "data" / "ibm" / "paysim_data.csv"
-LOCAL_IBM_FILE = PROJECT_DIR / "data" / "IBM_small_HI_data" / "HI-Small_Trans.csv"
-PROCESSED_DIR = PROJECT_DIR / "data" / "processed"
-CLEAN_DATA_FILE = PROJECT_DIR / "03-Data cleaning" / "clean_data.csv"
-
-
-def find_dataset(
-    expected_path: Path,
-    alternate_path: Path
-) -> Path:
-    """Locate a dataset using its primary or alternate file path."""
-    for path in (expected_path, alternate_path):
-        if path.is_file():
-            return path
-    raise FileNotFoundError(
-        f"Dataset not found. Place {expected_path.name} at {expected_path} "
-        f"or {alternate_path}."
-    )
+from src.paths import (
+    CLEAN_DATA_FILE,
+    IBM_CLEANED_FILE,
+    IBM_FILE,
+    LOCAL_IBM_FILE,
+    LOCAL_PAYSIM_FILE,
+    PAYSIM_CLEANED_FILE,
+    PAYSIM_FILE,
+    PROCESSED_DIR,
+)
 
 
 def _print_section(heading: str, value: object) -> None:
@@ -65,8 +49,8 @@ def main() -> None:
 
     # Save cleaned datasets so the summary-statistics script can analyze these outputs.
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
-    paysim_output = PROCESSED_DIR / "paysim_cleaned.csv"
-    ibm_output = PROCESSED_DIR / "ibm_cleaned.csv"
+    paysim_output = PAYSIM_CLEANED_FILE
+    ibm_output = IBM_CLEANED_FILE
     paysim.to_csv(paysim_output, index=False)
     ibm.to_csv(ibm_output, index=False)
 
