@@ -6,13 +6,19 @@ This project cleans and analyzes PaySim synthetic fraud data and IBM HI-Small
 synthetic money-laundering data. It combines the cleaned transactions for
 exploratory analysis and generates charts and a PDF report.
 
+## Why combine the Datasets?
+
+Concatenating the datasets is appropriate for a shared exploratory workflow becase both contain transaction-level records, and selected fields can be mapped to common analysis columns such as transaction amount, category, and a binary suspicious flag. Concatenation only oppends the records, it does not claim that transactions in one dataset match transactions in the other. 
+
+The combined data preserves `dataset_source` and `label_type`, such that PaySim fraud labels remain distinct from IBM money-laundering labels remain distinct from the IBM money-laundering labels. The datasets have different label definitions, features, and currencies, so their raw amounts and suspicious rates should not be treated as directly interchangeable. This is how the combination is implemented in the src/data_processing.py. 
+
 ## Datasets
 
-Download link for the **PAYSIM** 'Synthetic Finanical Datasets for Fraud Detection':
+Download link for the **PAYSIM** 'Synthetic Finanical Datasets for Fraud Detection' Dataset:
 [PAYSIM Synthetic Finanical Datasets for Fraud Detection](https://www.kaggle.com/datasets/ealaxi/paysim1)
 
-The IBM HI-Small transaction dataset is already included in the repository at
-`data/ibm/IBM_small_HI_data/HI-Small_Trans.csv`.
+Download link for the **IBM Transactions (HI-Small_Trans.csv)** Dataset:
+[IBM Transactions for Anti Money Laundering (HI-Small_Trans.csv)](https://www.kaggle.com/datasets/ealtman2019/ibm-transactions-for-anti-money-laundering-aml?select=HI-Small_Trans.csv)
 
 The pipeline looks for datasets in these default locations:
 
@@ -62,6 +68,36 @@ python 05-Report/generate_report.py
 PaySim labels fraudulent transactions, while IBM labels money-laundering
 transactions. The combined data preserves the source and label type so results
 from the two datasets can be interpreted separately.
+
+## EDA findings and interpretation
+
+- **The labels are rare in both datasets.** PaySim has 8,213 fraud-labeled
+  transactions out of 6,362,620 (about 0.129%); IBM has 5,177
+  laundering-labeled transactions out of 5,078,345 (about 0.102%). These are
+  highly imbalanced datasets, so overall accuracy or raw counts alone would
+  hide how rarely the positive labels occur. The label meanings differ, so
+  these rates are descriptive within each source, not a direct comparison of
+  equivalent outcomes.
+- **Category rates and category counts tell different stories.** PaySim
+  transfers have the highest fraud rate (0.7688%; 4,097 of 532,909), while
+  cash-outs have a lower rate (0.1840%) but slightly more fraud-labeled
+  transactions (4,116) because there are many more cash-outs. In IBM, ACH has
+  the highest laundering rate (0.7462%; 4,483 of 600,797). These are observed
+  rates in the supplied synthetic data, not evidence that a category causes
+  fraud or laundering.
+- **The amount and time charts need context.** IBM amounts are shown in native
+  currencies, which are not converted and cannot be compared directly across
+  currencies. The daily charts show uneven transaction volume, not daily
+  suspicious rates; gaps or drops reflect the supplied data's coverage and do
+  not by themselves indicate a change in risk. The PaySim amount/balance chart
+  uses a random sample of 5,000 positive-amount rows. Its few fraud-labeled
+  points suggest patterns to investigate, but the sparse positives and overlap
+  with non-fraud records do not establish a reliable detection rule.
+- **The auxiliary charts count metadata records.** The laundering-pattern
+  chart counts rows in `HI-Small_Patterns.csv`, and the entity-type chart
+  counts IBM account-registry records. These counts do not show transaction
+  prevalence or establish that a pattern or entity type is associated with
+  laundering.
 
 ## Project structure
 
