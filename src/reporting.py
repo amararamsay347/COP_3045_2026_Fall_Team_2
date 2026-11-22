@@ -15,7 +15,15 @@ import seaborn as sns
 # Import FPDF to automatically build the PDF report.
 from fpdf import FPDF
 
+from src.data_loading import load_combined_transactions
 from src.paths import CLEAN_DATA_FILE, REPORT_FILE
+from src.report_statistics import (
+    build_findings,
+    highlight_categories,
+    summarize_amounts,
+    summarize_categories,
+    summarize_sources,
+)
 
 from pathlib import Path
 
@@ -29,48 +37,13 @@ class TransactionReport:
         self.output_dir = output_file.parent
 
     def _load_transactions(self) -> pd.DataFrame:
-        """Load and validate the cleaned transactions for the report."""
-        if not self.input_file.is_file():
-            raise FileNotFoundError(
-                f"Combined dataset not found: {self.input_file}. Run python src/main.py first."
-            )
-
-        columns = [
-            "transaction_amount",
-            "currency",
-            "transaction_category",
-            "dataset_source",
-            "label_type",
-            "is_suspicious",
-        ]
-
-        df = pd.read_csv(
-            self.input_file,
-            usecols=columns,
-            low_memory=False,
-            dtype={
-                "transaction_amount": "float64",
-                "currency": "category",
-                "transaction_category": "category",
-                "dataset_source": "category",
-                "label_type": "category",
-                "is_suspicious": "int8",
-            },
-        )
-
-        if df.empty:
-            raise ValueError(
-                f"The combined dataset has no transaction rows: {self.input_file}"
-            )
-
-        # PaySim has no defined currency. Keep its rows in the amount summaries.
-        df["currency"] = df["currency"].astype("category")
+        """Load the shared schema and label unspecified currencies for display."""
+        df = load_combined_transactions(self.input_file)
         if "N/A" not in df["currency"].cat.categories:
             df["currency"] = df["currency"].cat.add_categories(["N/A"])
         df["currency"] = df["currency"].fillna("N/A")
-
-        print("Combined dataset loaded successfully.")
         return df
+
 
     def _plot_suspicious_rate_by_source(
         self, source_summary: pd.DataFrame
@@ -80,11 +53,11 @@ class TransactionReport:
         plt.figure(figsize=(8, 5))
         sns.barplot(
             data=source_summary,
-            x="dataset_source",
+            x="label_type", order=["fraud", "laundering"],
             y="suspicious_rate",
         )
         plt.title("Suspicious Transaction Rate by Dataset")
-        plt.xlabel("Dataset")
+        plt.xlabel("Positive label (PaySim fraud / IBM laundering)")
         plt.ylabel("Suspicious Rate (%)")
         plt.tight_layout()
         plt.savefig(chart_file, dpi=150)
@@ -135,366 +108,11 @@ class TransactionReport:
 
         return chart_file
 
-
-
-
-
-
-        # ------------------------------------------------------------
-        # DATASET SOURCE SUMMARY
-        # ------------------------------------------------------------
-
-        # Group the combined dataset by its original source.
-        # The mean of is_suspicious gives the suspicious transaction rate
-        # because the column contains only 0 and 1.
-
-    def _summarize_sources(self, df: pd.DataFrame) -> pd.DataFrame:
-
-
-        source_summary = (
-            df.groupby(
-                "dataset_source",
-                observed=True
-            )["is_suspicious"]
-            .agg(["count", "sum", "mean"])
-            .reset_index()
-        )
-
-        # Give the calculated columns clearer names.
-        source_summary = source_summary.rename(
-            columns={
-                "count": "transaction_count",
-                "sum": "suspicious_count",
-                "mean": "suspicious_rate",
-            }
-        )
-
-        # Convert the suspicious rate from a decimal into a percentage.
-        source_summary["suspicious_rate"] = (
-            source_summary["suspicious_rate"] * 100
-        )
-
-        return source_summary
-
-
-
-        # ------------------------------------------------------------
-        # TRANSACTION CATEGORY SUMMARY
-        # ------------------------------------------------------------
-
-        # Calculate the number of transactions and suspicious rate
-        # for every transaction category in each dataset.
-
-    def _summarize_categories(self, df: pd.DataFrame) -> pd.DataFrame:
-
-        category_summary = (
-            df.groupby(
-                [
-                    "dataset_source",
-                    "transaction_category",
-                ],
-                observed=True,
-            )["is_suspicious"]
-            .agg(["count", "sum", "mean"])
-            .reset_index()
-        )
-
-        # Rename the calculated columns.
-        category_summary = category_summary.rename(
-            columns={
-                "count": "transaction_count",
-                "sum": "suspicious_count",
-                "mean": "suspicious_rate",
-            }
-        )
-
-        # Convert the suspicious rate into a percentage.
-        category_summary["suspicious_rate"] = (
-            category_summary["suspicious_rate"] * 100
-        )
-
-        # Create a display name containing both the dataset and category.
-        # This makes it clear which dataset each category belongs to.
-        category_summary["display_category"] = (
-            category_summary["dataset_source"].astype(str)
-            + " - "
-            + category_summary["transaction_category"].astype(str)
-        )
-
-        # Sort the categories from highest to lowest suspicious rate.
-        category_summary = category_summary.sort_values(
-            "suspicious_rate",
-            ascending=False
-        )
-
-
-        return category_summary
-
-
-
-        # ------------------------------------------------------------
-        # FIND THE MAIN CURRENCY FOR EACH DATASET
-        # ------------------------------------------------------------
-
-        # The IBM dataset can contain different currencies.
-        # Amounts from different currencies should not be treated as though
-        # they have the same value.
-
-        # Count how often each currency appears in each dataset.
-
-    def _summarize_amounts(self, df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
-
-        currency_counts = (
-            df.groupby(
-                [
-                    "dataset_source",
-                    "currency",
-                ],
-                observed=True,
-            )
-            .size()
-            .reset_index(name="transaction_count")
-        )
-
-        # Sort so the most common currency appears first for each dataset.
-        currency_counts = currency_counts.sort_values(
-            [
-                "dataset_source",
-                "transaction_count",
-            ],
-            ascending=[
-                True,
-                False,
-            ],
-        )
-
-        # Select the most common currency from each dataset.
-        main_currency_by_source = (
-            currency_counts
-            .groupby(
-                "dataset_source",
-                observed=True,
-            )
-            .first()
-            .reset_index()
-        )
-
-
-        # ------------------------------------------------------------
-        # TRANSACTION AMOUNT SUMMARY
-        # ------------------------------------------------------------
-
-        # Create an empty list where each dataset's amount statistics
-        # will be stored.
-        amount_summary_rows = []
-
-        # Create another list for comparing suspicious and
-        # non-suspicious transaction amounts.
-        amount_status_rows = []
-
-        # Calculate amount statistics separately for each dataset using
-        # its most common currency.
-        for row in main_currency_by_source.itertuples(index=False):
-
-            source = row.dataset_source
-            currency = row.currency
-
-            # Keep transactions from this dataset and currency.
-            source_data = df[
-                (df["dataset_source"] == source)
-                & (df["currency"] == currency)
-            ]
-
-            # Select the transaction amount column.
-            amounts = source_data["transaction_amount"].dropna()
-
-            # Store basic numerical summary statistics.
-            amount_summary_rows.append(
-                {
-                    "dataset_source": str(source),
-                    "currency": str(currency),
-                    "count": amounts.count(),
-                    "mean": amounts.mean(),
-                    "std": amounts.std(),
-                    "percentile_25": amounts.quantile(0.25),
-                    "median": amounts.median(),
-                    "percentile_75": amounts.quantile(0.75),
-                    "minimum": amounts.min(),
-                    "maximum": amounts.max(),
-                }
-            )
-
-            # Calculate amount statistics separately for legitimate
-            # and suspicious transactions.
-            for status in [0, 1]:
-
-                status_amounts = source_data[
-                    source_data["is_suspicious"] == status
-                ]["transaction_amount"].dropna()
-
-                if status == 0:
-                    status_name = "Not Suspicious"
-                else:
-                    status_name = "Suspicious"
-
-                amount_status_rows.append(
-                    {
-                        "dataset_source": str(source),
-                        "currency": str(currency),
-                        "status": status_name,
-                        "count": status_amounts.count(),
-                        "mean_amount": status_amounts.mean(),
-                        "median_amount": status_amounts.median(),
-                    }
-                )
-
-
-        # Convert the lists into DataFrames so they can be used
-        # for tables and visualizations.
-        amount_summary = pd.DataFrame(
-            amount_summary_rows
-        )
-
-        amount_status_summary = pd.DataFrame(
-            amount_status_rows
-        )
-
-        # Create a label showing the dataset and currency together.
-        amount_status_summary["display_source"] = (
-            amount_status_summary["dataset_source"]
-            + " ("
-            + amount_status_summary["currency"]
-            + ")"
-        )
-
-        return amount_summary, amount_status_summary
-
-
-    def _build_findings(
-        self,
-        num_rows: int,
-        num_columns: int,
-        suspicious_count: int,
-        overall_suspicious_rate: float,
-        source_summary: pd.DataFrame,
-        category_summary: pd.DataFrame,
-        amount_status_summary: pd.DataFrame,
-    ) -> list[str]:
-        # ------------------------------------------------------------
-        # KEY ANALYTICAL FINDINGS
-        # ------------------------------------------------------------
-
-        # Find which dataset has the highest suspicious transaction rate.
-        highest_source_row = source_summary.loc[
-            source_summary["suspicious_rate"].idxmax()
-        ]
-
-        highest_source = highest_source_row[
-            "dataset_source"
-        ]
-
-        highest_source_rate = highest_source_row[
-            "suspicious_rate"
-        ]
-
-        # Find which transaction category has the highest suspicious rate.
-        highest_category_row = category_summary.iloc[0]
-
-        highest_category = highest_category_row[
-            "transaction_category"
-        ]
-
-        highest_category_source = highest_category_row[
-            "dataset_source"
-        ]
-
-        highest_category_rate = highest_category_row[
-            "suspicious_rate"
-        ]
-
-        # ------------------------------------------------------------
-        # AUTOMATIC FINDINGS
-        # ------------------------------------------------------------
-
-        # Create findings using values calculated directly from the data.
-        finding1 = (
-            "The combined analytical dataset contains "
-            + f"{num_rows:,}"
-            + " transactions and "
-            + str(num_columns)
-            + " variables."
-        )
-
-        finding2 = (
-            "There were "
-            + f"{suspicious_count:,}"
-            + " suspicious transactions, giving an overall suspicious rate of "
-            + f"{overall_suspicious_rate:.4f}%."
-        )
-
-        finding3 = (
-            str(highest_source)
-            + " had the highest suspicious transaction rate among the datasets at "
-            + f"{highest_source_rate:.4f}%."
-        )
-
-        finding4 = (
-            "The transaction category with the highest suspicious rate was "
-            + str(highest_category)
-            + " from "
-            + str(highest_category_source)
-            + ", with a suspicious rate of "
-            + f"{highest_category_rate:.4f}%."
-        )
-
-
-        findings = [finding1, finding2, finding3, finding4]
-
-        for source, group in amount_status_summary.groupby("display_source"):
-            medians = group.set_index("status")["median_amount"]
-            suspicious_median = medians["Suspicious"]
-            non_suspicious_median = medians["Not Suspicious"]
-            if not (pd.notna(suspicious_median) and non_suspicious_median > 0):
-                continue
-            findings.append(
-                f"In {source}, the median suspicious transaction "
-                f"({suspicious_median:,.2f}) was "
-                f"{suspicious_median / non_suspicious_median:.1f}x the median "
-                f"non-suspicious one ({non_suspicious_median:,.2f})."
-            )
-
-        top_categories = category_summary.head(3)
-        findings.append(
-            "The categories with the highest suspicious rates were "
-            + ", ".join(top_categories["display_category"])
-            + "."
-        )
-
-        ibm_ach = category_summary.loc[
-            (category_summary["dataset_source"] == "IBM")
-            & (category_summary["transaction_category"] == "ACH")
-        ]
-        if not ibm_ach.empty:
-            findings.append(
-                "IBM ACH transactions had a suspicious rate of "
-                f"{ibm_ach.iloc[0]['suspicious_rate']:.2f}%."
-            )
-
-        findings.append(
-            "Limitation: the data are synthetic and highly imbalanced "
-            f"(about {overall_suspicious_rate:.2f}% suspicious), so rates should "
-            "be read as relative, not as real-world fraud prevalence."
-        )
-
-
-        return findings
-
     def _add_dataset_overview(
         self, pdf: FPDF, num_rows: int, num_columns: int,
-        source_counts: pd.Series, label_type_counts: pd.Series,
-        not_suspicious_count: int, suspicious_count: int,
-        overall_suspicious_rate: float,
+        source_summary: pd.DataFrame,
     ) -> None:
+        source_counts = source_summary.set_index("dataset_source")["transaction_count"]
         # ------------------------------------------------------------
         # PROJECT TITLE
         # ------------------------------------------------------------
@@ -582,106 +200,17 @@ class TransactionReport:
             ln=True,
         )
 
-        pdf.cell(
-            0,
-            8,
-            "Not suspicious transactions: "
-            + f"{not_suspicious_count:,}",
-            ln=True,
-        )
-
-        pdf.cell(
-            0,
-            8,
-            "Suspicious transactions: "
-            + f"{suspicious_count:,}",
-            ln=True,
-        )
-
-        pdf.cell(
-            0,
-            8,
-            "Overall suspicious rate: "
-            + f"{overall_suspicious_rate:.4f}%",
-            ln=True,
-        )
-
         pdf.ln(5)
-
-
-        # ------------------------------------------------------------
-        # RECORD COUNTS BY DATASET
-        # ------------------------------------------------------------
-
-        # Add a small heading for the dataset counts.
-        pdf.set_font(
-            "Helvetica",
-            "B",
-            11,
-        )
-
-        pdf.cell(
-            0,
-            8,
-            "Records by dataset:",
-            ln=True,
-        )
-
-        pdf.set_font(
-            "Helvetica",
-            "",
-            11,
-        )
-
-        # Add one line for each dataset.
-        for source, count in source_counts.items():
-
-            pdf.cell(
+        for row in source_summary.itertuples(index=False):
+            pdf.multi_cell(
                 0,
                 8,
-                str(source)
-                + ": "
-                + f"{count:,}",
-                ln=True,
+                f"{row.dataset_source} {row.label_type} labels: "
+                f"{row.suspicious_count:,} of {row.transaction_count:,} "
+                f"({row.suspicious_rate:.4f}%).",
+                new_x="LMARGIN",
             )
 
-
-        # ------------------------------------------------------------
-        # LABEL TYPES
-        # ------------------------------------------------------------
-
-        pdf.ln(3)
-
-        pdf.set_font(
-            "Helvetica",
-            "B",
-            11,
-        )
-
-        pdf.cell(
-            0,
-            8,
-            "Label types:",
-            ln=True,
-        )
-
-        pdf.set_font(
-            "Helvetica",
-            "",
-            11,
-        )
-
-        # List how often each type of fraud/laundering label appears.
-        for label_type, count in label_type_counts.items():
-
-            pdf.cell(
-                0,
-                8,
-                str(label_type)
-                + ": "
-                + f"{count:,}",
-                ln=True,
-            )
 
     def _add_statistics_tables(
         self, pdf: FPDF, amount_summary: pd.DataFrame, category_summary: pd.DataFrame
@@ -924,7 +453,7 @@ class TransactionReport:
         pdf.cell(
             0,
             8,
-            "Categorical summary (top 8 categories by suspicious rate):",
+            "Category highlights by dataset",
             ln=True,
         )
 
@@ -936,8 +465,7 @@ class TransactionReport:
         pdf.multi_cell(
             0,
             6,
-            "Counts provide context for the rate; categories with few transactions "
-            "can have volatile rates.",
+            "Each source shows its highest label rates and the category with the most flagged transactions.",
             new_x="LMARGIN",
         )
 
@@ -947,9 +475,10 @@ class TransactionReport:
             8,
         )
         for width, title in (
-            (88, "Dataset and category"),
-            (42, "Transactions"),
-            (42, "Suspicious rate"),
+            (82, "Dataset and category"),
+            (35, "Transactions"),
+            (35, "Flagged"),
+            (35, "Label rate"),
         ):
             pdf.cell(width, 8, title, border=1)
         pdf.ln()
@@ -959,10 +488,11 @@ class TransactionReport:
             "",
             8,
         )
-        for row in category_summary.head(8).itertuples(index=False):
-            pdf.cell(88, 8, row.display_category, border=1)
-            pdf.cell(42, 8, f"{row.transaction_count:,}", border=1)
-            pdf.cell(42, 8, f"{row.suspicious_rate:.4f}%", border=1)
+        for row in highlight_categories(category_summary).itertuples(index=False):
+            pdf.cell(82, 8, row.display_category, border=1)
+            pdf.cell(35, 8, f"{row.transaction_count:,}", border=1)
+            pdf.cell(35, 8, f"{row.suspicious_count:,}", border=1)
+            pdf.cell(35, 8, f"{row.suspicious_rate:.4f}%", border=1)
             pdf.ln()
 
     def _add_chart_pages(
@@ -1041,7 +571,7 @@ class TransactionReport:
 
         pdf.set_x(pdf.l_margin)
         pdf.set_font("Helvetica", "", 9)
-        pdf.multi_cell(0, 6, "Categories are ordered by suspicious rate. Read each rate alongside its transaction count.", new_x="LMARGIN")
+        pdf.multi_cell(0, 6, "Categories are ordered by positive-label rate within each dataset. Read each rate alongside its transaction count.", new_x="LMARGIN")
 
 
         # ------------------------------------------------------------
@@ -1122,44 +652,15 @@ class TransactionReport:
         # Count the total number of variables used in the analytical dataset.
         num_columns = len(pd.read_csv(self.input_file, nrows=0).columns)
 
-        # Count how many transactions came from each original dataset.
-        source_counts = df["dataset_source"].value_counts()
+        source_summary = summarize_sources(df)
+        category_summary = summarize_categories(df)
+        amount_summary, amount_status_summary = summarize_amounts(df)
 
-        # Count the different label types used in the combined dataset.
-        label_type_counts = df["label_type"].value_counts()
-
-        # Count all legitimate transactions.
-        not_suspicious_count = int(
-            (df["is_suspicious"] == 0).sum()
-        )
-
-        # Count all transactions marked as fraud or laundering.
-        suspicious_count = int(
-            (df["is_suspicious"] == 1).sum()
-        )
-
-        # Calculate the overall percentage of transactions
-        # marked as suspicious.
-        overall_suspicious_rate = (
-            suspicious_count / num_rows * 100
-        )
-
-        source_summary = self._summarize_sources(df)
-        category_summary = self._summarize_categories(df)
-        amount_summary, amount_status_summary = self._summarize_amounts(df)
 
         chart1_file = self._plot_suspicious_rate_by_source(source_summary)
         chart2_file = self._plot_suspicious_rate_by_category(category_summary)
         chart3_file = self._plot_median_amount_by_status(amount_status_summary)
-        findings = self._build_findings(
-            num_rows,
-            num_columns,
-            suspicious_count,
-            overall_suspicious_rate,
-            source_summary,
-            category_summary,
-            amount_status_summary,
-        )
+        findings = build_findings(num_rows, source_summary, category_summary, amount_status_summary)
 
         # ------------------------------------------------------------
         # CREATE THE PDF
@@ -1177,16 +678,7 @@ class TransactionReport:
         # Add the first page.
         pdf.add_page()
 
-        self._add_dataset_overview(
-            pdf,
-            num_rows,
-            num_columns,
-            source_counts,
-            label_type_counts,
-            not_suspicious_count,
-            suspicious_count,
-            overall_suspicious_rate,
-        )
+        self._add_dataset_overview(pdf, num_rows, num_columns, source_summary)
         self._add_statistics_tables(pdf, amount_summary, category_summary)
         self._add_chart_pages(pdf, chart1_file, chart2_file, chart3_file)
         self._add_findings_page(pdf, findings)
