@@ -1,12 +1,7 @@
-"""Backward-compatible launcher for the application entry point."""
+"""Run the complete workflow through the package entry point."""
 
-from main import main as run_application
-
-
-def main() -> int:
-    """Run the same complete workflow as ``python main.py``."""
-    return run_application()
+from src.main import main
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()

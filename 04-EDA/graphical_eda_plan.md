@@ -1,7 +1,5 @@
 # Graphical EDA implementation plan
 
-Status: Approved by the user and implemented. Python execution remains manual.
-
 The supplied assignment requires reading `03-Data cleaning/clean_data.csv`
 into a pandas DataFrame named `df`, using Matplotlib and Seaborn, and creating
 at least three informative, clearly labelled visualizations. It requires
