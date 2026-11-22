@@ -56,6 +56,10 @@ just the report after the cleaned data is available, run:
 ```bash
 python 05-Report/generate_report.py
 ```
+## Cleaning preparation
+
+The program counts and keeps missing non label values and repeated rows because distinct transactions can match across the selected fields. Missing files or required columns, empty datasets, invalid labels, nonnumeric or infinite values in checked fields, and malformed IBM timestamps stop the run. Transaction types, currencies, and payment formats are trimmed and uppercased, while balance changes and same bank indicators are derived from the source fields.
+
 
 ## Outputs
 
