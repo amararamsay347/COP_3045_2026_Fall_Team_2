@@ -32,26 +32,39 @@ Or in the alternate locations:
 
 ## Setup
 
-Create and activate the Conda environment from the project root:
+1. In VS Code, open the repository folder named
+   `COP_3045_2026_Fall_Team_2`. This folder is the **project root** and must
+   contain `environment.yml`, `src/`, `04-EDA/`, and `05-Report/`.
 
-```bash
-conda env create -f environment.yml
-conda activate cop3045
-```
+2. Open the VS Code terminal. Run the commands below in this project root:
 
-If the environment already exists, activate it.
+   ```bash
+   conda env create -f environment.yml
+   conda activate cop3045
+   ```
+
+3. If the `cop3045` environment is already installed, skip the create command
+   and activate it directly:
+
+   ```bash
+   conda activate cop3045
+   ```
+
+The setup commands must be run while the terminal is in the project root.
+Do not run them from inside `src/`, `04-EDA/`, or `05-Report/`.
 
 ## Run the project
 
 From the project root, run the full workflow:
 
 ```bash
-python run_all.py
+python src/main.py
 ```
 
 The workflow cleans both datasets, produces summary statistics, generates
-exploratory data analysis charts, and creates the PDF report. To regenerate
-just the report after the cleaned data is available, run:
+exploratory data analysis charts, and creates the PDF report.
+
+To regenerate just the report after the cleaned data is available, run:
 
 ```bash
 python 05-Report/generate_report.py
@@ -106,11 +119,10 @@ from the two datasets can be interpreted separately.
 
 ## Project structure
 
-- `run_all.py` runs the full workflow in order.
 - `src/data_processing.py` cleans and combines the transaction datasets.
-- `src/main.py` runs data cleaning and exports the cleaned and combined data.
+- `src/main.py` runs the full workflow in order and exports the project outputs.
 - `src/summary_statistics.py` produces summary statistics.
 - `04-EDA/` contains the graphical EDA workflow and chart output.
 - `05-Report/` contains the PDF report generator and report output.
 
-The src/ package separates CSV loading, preprocessing, summary statistics, exploratory data analysis, and PDF reporting into individual modules. src/paths.py defines the shared input and output locations, and run_all.py runs the pipeline stages in order.
+The src/ package separates CSV loading, preprocessing, summary statistics, exploratory data analysis, and PDF reporting into individual modules. src/paths.py defines the shared input and output locations, and `python src/main.py` runs the pipeline stages in order.
