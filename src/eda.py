@@ -1,6 +1,6 @@
 """Graphical EDA of the combined cleaned PAYSim and IBM transactions.
 
-Run src/main.py first to create 03-Data cleaning/clean_data.csv.
+Run python -m src.main to create 03-Data cleaning/clean_data.csv.
 Charts are saved to 04-EDA/output/ when this script is run manually.
 """
 
@@ -16,25 +16,13 @@ import pandas as pd
 import seaborn as sns
 
 
+from src.data_loading import load_combined_transactions
 from src.paths import (
     CLEAN_DATA_FILE,
     EDA_OUTPUT_DIR as OUTPUT_DIR,
     IBM_ACCOUNTS_FILE,
     IBM_PATTERNS_FILE,
 )
-
-
-EDA_COLUMNS = {
-    "dataset_source",
-    "transaction_amount",
-    "currency",
-    "transaction_category",
-    "is_suspicious",
-    "label_type",
-    "step",
-    "Timestamp",
-    "origin_balance_change",
-}
 
 
 class TransactionEDA:
@@ -53,46 +41,19 @@ class TransactionEDA:
         self.patterns_file = patterns_file
 
     def load_data(self) -> pd.DataFrame:
-        """Read the assignment's cleaned CSV into a DataFrame named df."""
-        if not self.input_file.is_file():
-            raise FileNotFoundError(
-                f"Cleaned dataset not found: {self.input_file}. "
-                "Run src/main.py from the project folder first."
-            )
-
-        df = pd.read_csv(
-            self.input_file,
-            usecols=lambda column: column in EDA_COLUMNS,
-            dtype={
-                "dataset_source": "category",
-                "currency": "category",
-                "transaction_category": "category",
-                "label_type": "category",
-            },
-            low_memory=False,
+        """Load the combined CSV and prepare the EDA-specific fields."""
+        df = load_combined_transactions(
+            self.input_file, extra_columns=("step", "Timestamp", "origin_balance_change")
         )
-        missing_columns = EDA_COLUMNS.difference(df.columns)
-        if missing_columns:
-            raise ValueError(
-                "Cleaned dataset is missing EDA columns: "
-                + ", ".join(sorted(missing_columns))
-                + ". Recreate it with src/main.py."
-            )
-        if df.empty:
-            raise ValueError("The cleaned dataset contains no transaction rows.")
-
-        numeric_columns = (
-            "transaction_amount", "is_suspicious", "step", "origin_balance_change"
-        )
-        for column in numeric_columns:
+        for column in ("step", "origin_balance_change"):
             df[column] = pd.to_numeric(df[column], errors="coerce").replace(
                 [float("inf"), float("-inf")], float("nan")
             )
-        sources = set(df["dataset_source"].dropna().unique())
-        if not {"PAYSim", "IBM"}.issubset(sources):
+
+        if set(df["dataset_source"].unique()) != {"PAYSim", "IBM"}:
             raise ValueError(
-                "Expected combined PAYSim and IBM transactions. "
-                "Recreate the cleaned CSV with src/main.py."
+                f"{self.input_file}: EDA requires both PAYSim and IBM transactions. "
+                "Recreate it with python -m src.main."
             )
         return df
 

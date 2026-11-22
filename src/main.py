@@ -1,5 +1,6 @@
 from pathlib import Path
 import sys
+from collections.abc import Callable
 
 # Allow the project package to be imported when this script is run directly.
 if __package__ in (None, ""):
@@ -7,6 +8,7 @@ if __package__ in (None, ""):
 
 from src.data_loading import find_dataset
 from src.data_processing import TransactionDataProcessor, inspect_paysim
+from src.eda import main as run_eda
 from src.paths import (
     CLEAN_DATA_FILE,
     IBM_CLEANED_FILE,
@@ -16,7 +18,11 @@ from src.paths import (
     PAYSIM_CLEANED_FILE,
     PAYSIM_FILE,
     PROCESSED_DIR,
+    PROJECT_DIR,
+    REPORT_FILE,
 )
+from src.reporting import main as generate_report
+from src.summary_statistics import main as summarize_transactions
 
 
 def _print_section(heading: str, value: object) -> None:
@@ -25,8 +31,8 @@ def _print_section(heading: str, value: object) -> None:
     print(value)
 
 
-def main() -> None:
-    """Run the transaction data-processing workflow."""
+def prepare_transactions() -> None:
+    """Clean both datasets and export the source and combined files."""
 
     paysim_file = find_dataset(PAYSIM_FILE, LOCAL_PAYSIM_FILE)
     ibm_file = find_dataset(IBM_FILE, LOCAL_IBM_FILE)
@@ -75,6 +81,41 @@ def main() -> None:
     print(f"\nCombined cleaned dataset saved to: {CLEAN_DATA_FILE}")
 
 
-# Run the main workflow only when this file is executed directly.
+def _run_stage(
+    name: str, operation: Callable[[], None], recovery: str
+) -> None:
+    """Run one pipeline stage and report expected failures to the caller."""
+    print(f"=== {name} ===", flush=True)
+    try:
+        operation()
+    except (OSError, ValueError) as error:
+        raise SystemExit(f"{name} failed: {error}\n{recovery}") from None
+
+
+def main() -> None:
+    """Run data preparation, summary statistics, EDA, and PDF reporting."""
+    _run_stage(
+        "Data preparation",
+        prepare_transactions,
+        f"Check the raw CSV inputs for PaySim ({PAYSIM_FILE}) and IBM ({IBM_FILE}).",
+    )
+    _run_stage(
+        "Summary statistics",
+        summarize_transactions,
+        f"Check the cleaned CSVs in {PROCESSED_DIR} and rerun the workflow.",
+    )
+    _run_stage(
+        "Exploratory data analysis",
+        run_eda,
+        f"Check {CLEAN_DATA_FILE} and that the chart directory is writable.",
+    )
+    _run_stage(
+        "PDF reporting",
+        generate_report,
+        f"Check {CLEAN_DATA_FILE} and that {REPORT_FILE} is writable.",
+    )
+    print(f"Done. Report: {REPORT_FILE.relative_to(PROJECT_DIR).as_posix()}")
+
+
 if __name__ == "__main__":
     main()
