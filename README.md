@@ -14,29 +14,46 @@ python run_all.py
 ```
 
 The workflow prepares the datasets, runs summary statistics and graphical EDA,
-and generates the PDF report.
+and generates the PDF report. If the `cop3045` environment already exists,
+activate it instead of creating it again.
 
 ## Generate only the report
 
-After the combined dataset is available at
+After the combined dataset has been prepared at
 `03-Data cleaning/clean_data.csv`, run:
 
 ```powershell
 python 05-Report/generate_report.py
 ```
 
-The report command also accepts an alternate combined CSV, output directory,
-and PDF name:
+This creates `project_report.pdf` and three charts in `05-Report/`:
+
+- `suspicious_rate_by_source.png`
+- `suspicious_rate_by_category.png`
+- `median_amount_by_status.png`
+
+The report command accepts an alternate combined CSV, output directory, and
+PDF name:
 
 ```powershell
 python 05-Report/generate_report.py --data path/to/combined.csv --output-dir path/to/output --report-name report.pdf
 ```
 
-The report implementation is organized in `src/reporting/`. Its
-`ReportApplication` class can be reused with another compatible combined CSV.
+Use `python 05-Report/generate_report.py --help` to see all options. The
+reporting implementation is organized in `src/reporting/`; its
+`ReportApplication` class can be reused with another CSV containing the
+required transaction fields.
 
 ## Outputs
 
 - Combined data: `03-Data cleaning/clean_data.csv`
 - EDA charts: `04-EDA/output/`
 - PDF report and report charts: `05-Report/`
+
+## Validate automated reporting
+
+Run the reporting integration test from the project root:
+
+```powershell
+python -m pytest src/reporting/test_reporting.py -q
+```
