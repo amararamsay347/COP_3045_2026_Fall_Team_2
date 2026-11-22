@@ -1,4 +1,4 @@
-"""Small integration tests for the reporting package."""
+"""Integration tests for the reporting package."""
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -8,6 +8,7 @@ from src.reporting.loader import load_combined_data
 from src.reporting.application import ReportApplication
 from src.reporting.analysis import build_metrics
 from src.reporting.pdf_report import PDFReport
+from src.reporting import main
 
 
 def test_loader_and_report() -> None:
@@ -54,6 +55,17 @@ def test_loader_and_report() -> None:
                 (root / "report" / chart_name).read_bytes()
                 == (root / "repeated-report" / chart_name).read_bytes()
             )
+
+        cli_output_dir = root / "cli-report"
+        assert main([
+            "--data",
+            str(data_file),
+            "--output-dir",
+            str(cli_output_dir),
+            "--report-name",
+            "cli_report.pdf",
+        ]) == 0
+        assert (cli_output_dir / "cli_report.pdf").is_file()
 
         invalid_data_file = root / "missing_label.csv"
         pd.DataFrame({

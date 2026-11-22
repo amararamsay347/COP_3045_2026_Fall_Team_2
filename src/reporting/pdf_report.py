@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from pathlib import Path
 import pandas as pd
-from fpdf import FPDF
+from fpdf import FPDF, XPos, YPos
 
 from .analysis import ReportMetrics
 
@@ -11,7 +11,7 @@ from .analysis import ReportMetrics
 class PDFReport:
     """Build a formatted PDF report from loaded transaction metrics."""
 
-    def __init__(self, title: str = "Financial Fraud and Money-Laundering Detection") -> None:
+    def __init__(self, title: str = "Transaction Analysis Report") -> None:
         self._title = title
         self._pdf = FPDF()
         self._pdf.set_creation_date(
@@ -53,7 +53,9 @@ class PDFReport:
 
         pdf.ln(5)
         pdf.set_font("Helvetica", "B", 14)
-        pdf.cell(0, 10, "1. Dataset Summary", ln=True)
+        pdf.cell(
+            0, 10, "1. Dataset Summary", new_x=XPos.LMARGIN, new_y=YPos.NEXT
+        )
         pdf.set_font("Helvetica", "", 11)
         for text in (
             f"Total observations: {num_rows:,}",
@@ -62,25 +64,41 @@ class PDFReport:
             f"Suspicious transactions: {suspicious:,}",
             f"Overall suspicious rate: {overall_rate:.4f}%",
         ):
-            pdf.cell(0, 8, text, ln=True)
+            pdf.cell(0, 8, text, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
         pdf.ln(3)
         pdf.set_font("Helvetica", "B", 11)
-        pdf.cell(0, 8, "Records by dataset:", ln=True)
+        pdf.cell(
+            0, 8, "Records by dataset:", new_x=XPos.LMARGIN, new_y=YPos.NEXT
+        )
         pdf.set_font("Helvetica", "", 11)
         for source, count in frame["dataset_source"].value_counts().items():
-            pdf.cell(0, 8, f"{source}: {count:,}", ln=True)
+            pdf.cell(
+                0,
+                8,
+                f"{source}: {count:,}",
+                new_x=XPos.LMARGIN,
+                new_y=YPos.NEXT,
+            )
 
         pdf.ln(3)
         pdf.set_font("Helvetica", "B", 11)
-        pdf.cell(0, 8, "Label types:", ln=True)
+        pdf.cell(0, 8, "Label types:", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.set_font("Helvetica", "", 11)
         for label, count in frame["label_type"].value_counts().items():
-            pdf.cell(0, 8, f"{label}: {count:,}", ln=True)
+            pdf.cell(
+                0,
+                8,
+                f"{label}: {count:,}",
+                new_x=XPos.LMARGIN,
+                new_y=YPos.NEXT,
+            )
 
         pdf.add_page()
         pdf.set_font("Helvetica", "B", 14)
-        pdf.cell(0, 10, "2. Summary Statistics", ln=True)
+        pdf.cell(
+            0, 10, "2. Summary Statistics", new_x=XPos.LMARGIN, new_y=YPos.NEXT
+        )
         pdf.set_font("Helvetica", "", 10)
         pdf.multi_cell(
             0,
@@ -93,7 +111,9 @@ class PDFReport:
         self._amount_table(metrics.amount_summary)
         pdf.ln(4)
         pdf.set_font("Helvetica", "B", 10)
-        pdf.cell(0, 8, "Spread and quartiles:", ln=True)
+        pdf.cell(
+            0, 8, "Spread and quartiles:", new_x=XPos.LMARGIN, new_y=YPos.NEXT
+        )
         pdf.set_font("Helvetica", "B", 8)
         quartile_columns = (
             (35, "Dataset"),
@@ -132,7 +152,13 @@ class PDFReport:
 
         pdf.ln(3)
         pdf.set_font("Helvetica", "B", 10)
-        pdf.cell(0, 8, "Categorical summary (top 8 categories by suspicious rate):", ln=True)
+        pdf.cell(
+            0,
+            8,
+            "Categorical summary (top 8 categories by suspicious rate):",
+            new_x=XPos.LMARGIN,
+            new_y=YPos.NEXT,
+        )
         pdf.set_font("Helvetica", "", 9)
         pdf.multi_cell(
             0,
@@ -153,7 +179,9 @@ class PDFReport:
 
         pdf.add_page()
         pdf.set_font("Helvetica", "B", 14)
-        pdf.cell(0, 10, "3. Visualizations", ln=True)
+        pdf.cell(
+            0, 10, "3. Visualizations", new_x=XPos.LMARGIN, new_y=YPos.NEXT
+        )
         self._chart_page(
             pdf,
             "Suspicious Transaction Rate by Dataset",
@@ -174,7 +202,9 @@ class PDFReport:
         )
 
         pdf.set_font("Helvetica", "B", 14)
-        pdf.cell(0, 10, "4. Key Analytical Findings", ln=True)
+        pdf.cell(
+            0, 10, "4. Key Analytical Findings", new_x=XPos.LMARGIN, new_y=YPos.NEXT
+        )
         pdf.set_font("Helvetica", "", 11)
         for finding in self._findings(frame, total_columns, metrics):
             pdf.multi_cell(0, 7, finding)
@@ -198,7 +228,7 @@ class PDFReport:
 
     def _chart_page(self, pdf: FPDF, title: str, chart_file: Path, caption: str) -> None:
         pdf.set_font("Helvetica", "B", 11)
-        pdf.cell(0, 8, title, ln=True)
+        pdf.cell(0, 8, title, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.image(str(chart_file), x=15, w=170)
         pdf.set_font("Helvetica", "", 9)
         pdf.multi_cell(0, 6, caption)
